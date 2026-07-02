@@ -1,0 +1,214 @@
+'use client';
+
+import clsx from 'clsx';
+import { useEffect, useMemo, useState } from 'react';
+import { TOPICS, STYLES } from '~/data/taxonomy';
+import { BookIcon, ImageIcon } from '~/components/ui/icons';
+
+export interface TemplateItem {
+  id: number;
+  kind: 'image' | 'book';
+  topic: string;
+  styleKey: string;
+  title: string;
+  subtitle: string | null;
+  brief: string;
+  options: Record<string, any> | null;
+  coverUrl: string | null;
+}
+
+type Tab = 'type' | 'style';
+
+export function TemplateGallery({
+  kind,
+  onPick,
+}: {
+  kind: 'image' | 'book';
+  onPick: (t: TemplateItem) => void;
+}) {
+  const [tab, setTab] = useState<Tab>('type');
+  const [topic, setTopic] = useState<string>('all');
+  const [style, setStyle] = useState<string>('all');
+  const [all, setAll] = useState<TemplateItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 按当前模式（图片/绘本）拉取对应模板
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/templates?kind=${kind}`)
+      .then((r) => r.json())
+      .then((d) => setAll(d.templates || []))
+      .catch(() => setAll([]))
+      .finally(() => setLoading(false));
+  }, [kind]);
+
+  const filtered = useMemo(() => {
+    return all.filter((t) => {
+      if (tab === 'type' && topic !== 'all' && t.topic !== topic) return false;
+      if (tab === 'style' && style !== 'all' && t.styleKey !== style) return false;
+      return true;
+    });
+  }, [all, tab, topic, style]);
+
+  return (
+    <div className="mx-auto mt-8 w-full max-w-5xl rounded-2xl border border-cream-line bg-white/60 p-4 shadow-soft">
+      {/* 标题 + 类型 / 风格 tab */}
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-medium text-ink">
+          {kind === 'book' ? '绘本模板' : '图片模板'}
+        </p>
+        <div className="flex items-center gap-1">
+          <SegTab active={tab === 'type'} onClick={() => setTab('type')}>
+            类型
+          </SegTab>
+          <SegTab active={tab === 'style'} onClick={() => setTab('style')}>
+            风格
+          </SegTab>
+        </div>
+      </div>
+
+      {/* 二级 chips */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {tab === 'type' ? (
+          <>
+            <Chip active={topic === 'all'} onClick={() => setTopic('all')}>
+              全部
+            </Chip>
+            {TOPICS.map((t) => (
+              <Chip
+                key={t.key}
+                active={topic === t.key}
+                onClick={() => setTopic(t.key)}
+              >
+                {t.name}
+              </Chip>
+            ))}
+          </>
+        ) : (
+          <>
+            <Chip active={style === 'all'} onClick={() => setStyle('all')}>
+              全部
+            </Chip>
+            {STYLES.map((s) => (
+              <Chip
+                key={s.key}
+                active={style === s.key}
+                onClick={() => setStyle(s.key)}
+              >
+                {s.name}
+              </Chip>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* 卡片网格 */}
+      <div className="mt-4">
+        {loading ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="aspect-[4/3] animate-pulse rounded-xl bg-cream"
+              />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <p className="py-10 text-center text-sm text-ink-muted">
+            该分类下暂无模板
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {filtered.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => onPick(t)}
+                className="group overflow-hidden rounded-xl border border-cream-line bg-white text-left transition-all hover:-translate-y-0.5 hover:border-clay/50 hover:shadow-soft"
+              >
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-cream">
+                  {t.coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={t.coverUrl}
+                      alt={t.title}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-ink-muted">
+                      {t.kind === 'book' ? <BookIcon /> : <ImageIcon />}
+                    </div>
+                  )}
+                  {/* 类型角标 */}
+                  <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-medium text-ink-soft backdrop-blur">
+                    {t.kind === 'book' ? (
+                      <BookIcon width={11} height={11} />
+                    ) : (
+                      <ImageIcon width={11} height={11} />
+                    )}
+                    {t.kind === 'book' ? '绘本' : '图片'}
+                  </span>
+                </div>
+                <div className="px-2.5 py-2">
+                  <p className="truncate text-sm font-medium text-ink">
+                    {t.title}
+                  </p>
+                  {t.subtitle && (
+                    <p className="truncate text-xs text-ink-muted">
+                      {t.subtitle}
+                    </p>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SegTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+        active ? 'bg-ink text-white' : 'text-ink-soft hover:bg-cream'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        active
+          ? 'border-clay bg-clay text-white'
+          : 'border-cream-line bg-white text-ink-soft hover:border-clay/40'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
