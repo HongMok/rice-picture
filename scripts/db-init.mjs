@@ -20,9 +20,10 @@ try {
   /* .env.local 不存在则忽略 */
 }
 
-const connectionString = process.env.POSTGRES_URL;
+const connectionString =
+  process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
 if (!connectionString) {
-  console.error('❌ 缺少 POSTGRES_URL，请在 .env.local 中配置');
+  console.error('❌ 缺少数据库连接串（POSTGRES_URL / DATABASE_URL），请在 .env.local 中配置');
   process.exit(1);
 }
 

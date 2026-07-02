@@ -31,3 +31,4 @@ next-env.d.ts
 # 无关文件 / 临时脚本
 picture-skill.md
 _*.mjs
+.vercel

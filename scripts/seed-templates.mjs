@@ -18,9 +18,10 @@ try {
 } catch {}
 
 const KEY = process.env.DASHSCOPE_API_KEY;
-const PG = process.env.POSTGRES_URL;
+const PG =
+  process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
 if (!KEY || !PG) {
-  console.error('❌ 缺少 DASHSCOPE_API_KEY 或 POSTGRES_URL');
+  console.error('❌ 缺少 DASHSCOPE_API_KEY 或 数据库连接串（POSTGRES_URL / DATABASE_URL）');
   process.exit(1);
 }
 

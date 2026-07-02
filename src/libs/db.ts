@@ -11,9 +11,13 @@ declare global {
 }
 
 function createPool() {
-  const connectionString = process.env.POSTGRES_URL;
+  // 兼容多种命名：POSTGRES_URL（本地/Vercel Postgres）、DATABASE_URL（Neon 默认）
+  const connectionString =
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL;
   if (!connectionString) {
-    throw new Error('缺少环境变量 POSTGRES_URL');
+    throw new Error('缺少数据库连接串（POSTGRES_URL / DATABASE_URL）');
   }
   // Neon / Vercel Postgres 走 TLS；本地无 sslmode 时不启用
   const needSsl = /sslmode=require|neon\.tech|vercel/i.test(connectionString);
