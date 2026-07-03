@@ -10,6 +10,7 @@
     "db:init": "node scripts/db-init.mjs"
   },
   "dependencies": {
+    "@vercel/blob": "^2.5.0",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "jose": "^5.9.6",
@@ -32,6 +33,7 @@
     "eslint-config-next": "14.2.25",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "ws": "^8.21.0"
   }
 }

@@ -10,6 +10,7 @@ import { Composer, type ComposerState, type Mode } from '~/components/app/Compos
 import { TemplateGallery, type TemplateItem } from '~/components/app/TemplateGallery';
 import { BookProgress } from '~/components/app/BookProgress';
 import { BookReader, type ReaderPage } from '~/components/app/BookReader';
+import { GameStudio } from '~/components/app/GameStudio';
 import { Button, Spinner } from '~/components/ui';
 import { DownloadIcon, BookIcon, MenuIcon, SparkleIcon } from '~/components/ui/icons';
 import { DEFAULT_RATIO, DEFAULT_PAGE_COUNT } from '~/data/taxonomy';
@@ -41,6 +42,7 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [panel, setPanel] = useState<'create' | 'game'>('create');
   const { collapsed, toggle } = useSidebarCollapsed();
 
   async function downloadPdf(title: string) {
@@ -298,6 +300,31 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
         </header>
 
         <main className="flex-1 overflow-y-auto px-6 py-8 md:px-10">
+          {/* 顶部：创作 / 游戏 切换 */}
+          <div className="mx-auto mb-6 flex w-fit gap-1 rounded-xl border border-cream-line bg-white p-1">
+            {(
+              [
+                ['create', '图卡 / 绘本'],
+                ['game', '互动游戏'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setPanel(key)}
+                className={
+                  'rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ' +
+                  (panel === key ? 'bg-clay text-white' : 'text-ink-soft hover:bg-cream')
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {panel === 'game' ? (
+            <GameStudio />
+          ) : (
+            <>
           {/* 生成区 */}
           <Composer
             state={composer}
@@ -401,6 +428,8 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
           {/* 模板库（仅在初始 compose 态展示，按当前模式区分图片/绘本） */}
           {stage.kind === 'compose' && (
             <TemplateGallery kind={composer.mode} onPick={pickTemplate} />
+          )}
+            </>
           )}
         </main>
       </div>
