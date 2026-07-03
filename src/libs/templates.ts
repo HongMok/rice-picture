@@ -1,4 +1,4 @@
-import { query } from '~/libs/db';
+import { query, queryOne } from '~/libs/db';
 
 export interface TemplateRow {
   id: number;
@@ -12,6 +12,27 @@ export interface TemplateRow {
   prompt: string | null;
   cover_url: string | null;
   sort: number;
+}
+
+export interface TemplatePageRow {
+  id: number;
+  template_id: number;
+  page_index: number;
+  text: string | null;
+  image_url: string | null;
+}
+
+export async function getTemplate(id: number): Promise<TemplateRow | null> {
+  return queryOne<TemplateRow>('select * from templates where id = $1', [id]);
+}
+
+export async function getTemplatePages(
+  templateId: number
+): Promise<TemplatePageRow[]> {
+  return query<TemplatePageRow>(
+    'select * from template_pages where template_id = $1 order by page_index asc',
+    [templateId]
+  );
 }
 
 export async function listTemplates(filter: {

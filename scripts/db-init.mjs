@@ -48,8 +48,8 @@ async function main() {
   await pool.query(
     `insert into users (username, password, nickname)
      values ($1, $2, $3)
-     on conflict (username) do update set password = excluded.password`,
-    [DEMO_USER, hash, '演示老师']
+     on conflict (username) do update set password = excluded.password, nickname = excluded.nickname`,
+    [DEMO_USER, hash, 'Miss Li']
   );
 
   console.log('\n✅ 初始化完成！');

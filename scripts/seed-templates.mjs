@@ -77,6 +77,22 @@ const TEMPLATES = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 通用重试：网络抖动/限流时退避重试
+async function retry(fn, label, tries = 4) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const wait = 2000 * (i + 1);
+      process.stdout.write(`(${label}重试${i + 1}/${tries}) `);
+      await sleep(wait);
+    }
+  }
+  throw lastErr;
+}
+
 async function createTask(prompt) {
   const r = await fetch(
     'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
@@ -113,6 +129,58 @@ async function pollTask(taskId) {
   throw new Error('轮询超时');
 }
 
+// 生成一张图（提交 + 轮询），带重试与节流
+async function genImage(prompt) {
+  const url = await retry(async () => {
+    const taskId = await createTask(prompt);
+    return await pollTask(taskId);
+  }, '生图');
+  await sleep(1200);
+  return url;
+}
+
+// 用 qwen-plus 写故事并拆页，返回 { title, pages:[{scene,text}] }
+async function writeStory(brief, pageCount) {
+  const system =
+    '你是擅长为特需儿童创作绘本的作者。语言简单、具体、正面，句子短。必须严格输出 JSON，不要多余文字或代码块。';
+  const user = [
+    `请把这个故事想法扩写成一个完整绘本，正好 ${pageCount} 页：${brief}`,
+    '每页含 text（1~2 句简短中文正文）与 scene（该页画面描述，用于绘画，含人物动作场景情绪，画面里不要文字）。',
+    '全书角色形象保持一致（在每个 scene 里重复描述主角外貌）。',
+    `输出：{"title":"标题","pages":[{"text":"...","scene":"..."}]}，pages 长度正好 ${pageCount}。`,
+  ].join('\n');
+  const r = await fetch(
+    'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'qwen-plus',
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature: 0.8,
+        response_format: { type: 'json_object' },
+      }),
+    }
+  );
+  const d = await r.json();
+  if (!r.ok) throw new Error(d?.error?.message || `写文失败 HTTP ${r.status}`);
+  const content = d?.choices?.[0]?.message?.content || '';
+  const s = content.indexOf('{');
+  const e = content.lastIndexOf('}');
+  const parsed = JSON.parse(content.slice(s, e + 1));
+  const pages = (parsed.pages || [])
+    .map((p) => ({ scene: String(p.scene || '').trim(), text: String(p.text || '').trim() }))
+    .filter((p) => p.scene || p.text)
+    .slice(0, pageCount);
+  return { title: String(parsed.title || brief).slice(0, 60), pages };
+}
+
 async function main() {
   console.log('→ 清空旧模板…');
   await pool.query('delete from templates');
@@ -123,11 +191,10 @@ async function main() {
     const prompt = `${t.scene}。${STYLE[t.style]}`;
     process.stdout.write(`[${i}/${TEMPLATES.length}] ${t.title} … `);
     try {
-      const taskId = await createTask(prompt);
-      const url = await pollTask(taskId);
-      await pool.query(
+      const url = await genImage(prompt); // 封面图
+      const row = await pool.query(
         `insert into templates (kind, topic, style_key, title, subtitle, brief, options, prompt, cover_url, sort)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id`,
         [
           t.kind,
           t.topic,
@@ -141,11 +208,46 @@ async function main() {
           i,
         ]
       );
+      const templateId = row.rows[0].id;
+
+      // 绘本模板：写故事拆页 + 逐页生图，存 template_pages
+      if (t.kind === 'book') {
+        const pageCount = t.options?.pageCount || 4;
+        process.stdout.write(`写文… `);
+        const story = await retry(() => writeStory(t.brief, pageCount), '写文');
+        // 用故事标题回填模板标题（更贴合内容）
+        await pool.query('update templates set title = $1 where id = $2', [
+          story.title || t.title,
+          templateId,
+        ]);
+        let done = 0;
+        for (let pi = 0; pi < story.pages.length; pi++) {
+          const p = story.pages[pi];
+          try {
+            const pageUrl = await genImage(`${p.scene}。${STYLE[t.style]}`);
+            await pool.query(
+              `insert into template_pages (template_id, page_index, text, image_url)
+               values ($1,$2,$3,$4)`,
+              [templateId, pi, p.text, pageUrl]
+            );
+            // 首页图兼作封面
+            if (pi === 0) {
+              await pool.query('update templates set cover_url = $1 where id = $2', [
+                pageUrl,
+                templateId,
+              ]);
+            }
+            done++;
+          } catch {
+            /* 单页失败跳过 */
+          }
+        }
+        process.stdout.write(`${done}/${story.pages.length}页 `);
+      }
       console.log('✓');
     } catch (e) {
       console.log('✗', e.message);
     }
-    await sleep(1200); // 节流，规避限流
   }
 
   const { rows } = await pool.query('select count(*) from templates');

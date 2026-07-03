@@ -22,12 +22,14 @@ export function BookReader({
   onClose,
   onDownloadPdf,
   pdfBusy,
+  footer,
 }: {
   title: string;
   pages: ReaderPage[];
   onClose: () => void;
   onDownloadPdf?: () => void;
   pdfBusy?: boolean;
+  footer?: React.ReactNode;
 }) {
   const [i, setI] = useState(0);
   const total = pages.length;
@@ -156,6 +158,7 @@ export function BookReader({
         <p className="mt-1 text-center text-xs text-ink-muted">
           第 {i + 1} / {total} 页 · 用左右方向键翻页
         </p>
+        {footer}
       </div>
     </div>
   );

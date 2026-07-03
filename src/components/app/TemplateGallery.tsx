@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
 import { TOPICS, STYLES } from '~/data/taxonomy';
 import { BookIcon, ImageIcon } from '~/components/ui/icons';
+import { TemplateDetail } from '~/components/app/TemplateDetail';
 
 export interface TemplateItem {
   id: number;
@@ -31,6 +32,7 @@ export function TemplateGallery({
   const [style, setStyle] = useState<string>('all');
   const [all, setAll] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewId, setViewId] = useState<number | null>(null);
 
   // 按当前模式（图片/绘本）拉取对应模板
   useEffect(() => {
@@ -120,9 +122,8 @@ export function TemplateGallery({
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {filtered.map((t) => (
-              <button
+              <div
                 key={t.id}
-                onClick={() => onPick(t)}
                 className="group overflow-hidden rounded-xl border border-cream-line bg-white text-left transition-all hover:-translate-y-0.5 hover:border-clay/50 hover:shadow-soft"
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-cream">
@@ -147,8 +148,26 @@ export function TemplateGallery({
                     )}
                     {t.kind === 'book' ? '绘本' : '图片'}
                   </span>
+                  {/* 悬停遮罩：查看 / 使用 */}
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 bg-ink/45 opacity-0 backdrop-blur-[1px] transition-opacity group-hover:opacity-100">
+                    <button
+                      onClick={() => setViewId(t.id)}
+                      className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-ink shadow-soft transition-transform hover:scale-105"
+                    >
+                      查看
+                    </button>
+                    <button
+                      onClick={() => onPick(t)}
+                      className="rounded-full bg-clay px-3 py-1.5 text-xs font-medium text-white shadow-soft transition-transform hover:scale-105"
+                    >
+                      使用
+                    </button>
+                  </div>
                 </div>
-                <div className="px-2.5 py-2">
+                <button
+                  onClick={() => onPick(t)}
+                  className="block w-full px-2.5 py-2 text-left"
+                >
                   <p className="truncate text-sm font-medium text-ink">
                     {t.title}
                   </p>
@@ -157,12 +176,23 @@ export function TemplateGallery({
                       {t.subtitle}
                     </p>
                   )}
-                </div>
-              </button>
+                </button>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {viewId !== null && (
+        <TemplateDetail
+          id={viewId}
+          onClose={() => setViewId(null)}
+          onUse={(t) => {
+            setViewId(null);
+            onPick(t);
+          }}
+        />
+      )}
     </div>
   );
 }
