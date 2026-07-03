@@ -104,9 +104,9 @@ export function LibraryPage() {
     if (it.type === 'lesson-plan') {
       router.push(`/app/lesson-plan/${it.id}`);
     } else if (it.type === 'image') {
-      router.push(`/app?panel=image&open=${it.id}`);
+      router.push(`/app/library/image/${it.id}`);
     } else {
-      router.push(`/app?panel=book&open=${it.id}`);
+      router.push(`/app/library/book/${it.id}`);
     }
   }
 
@@ -222,7 +222,8 @@ export function LibraryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-10 md:px-10">
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-[1200px] px-6 py-10 md:px-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-serif text-[28px] font-normal leading-tight text-ink">
@@ -282,6 +283,7 @@ export function LibraryPage() {
           onConfirm={handleDelete}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -451,6 +453,8 @@ function Card({
             loading="lazy"
             onError={() => setImgBroken(true)}
           />
+        ) : item.type === 'lesson-plan' ? (
+          <LessonPlanCoverArt />
         ) : (
           <div
             className={clsx(
@@ -570,6 +574,70 @@ function Card({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- 教案统一封面：一张纸卡 + 折角 + 三行结构 + 勾 ---------------- */
+
+function LessonPlanCoverArt() {
+  // 用 Japandi 调色板；只用 SVG 保持清晰度，不依赖任何位图
+  const paper = '#F7F1E6';
+  const paperLine = '#E4D9C4';
+  const clay = '#B18463';
+  const claySoft = '#D8B593';
+  const sage = '#7FA98B';
+  const ink = '#3E3A36';
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-sage-mist">
+      <svg
+        viewBox="0 0 200 150"
+        preserveAspectRatio="xMidYMid meet"
+        width="60%"
+        height="60%"
+        aria-hidden="true"
+        role="img"
+      >
+        {/* 纸卡本体（带折角） */}
+        <path
+          d="M40 22 H140 L160 42 V128 H40 Z"
+          fill={paper}
+          stroke={ink}
+          strokeWidth={1.4}
+          strokeLinejoin="round"
+        />
+        {/* 折角三角 */}
+        <path
+          d="M140 22 V42 H160 Z"
+          fill={paperLine}
+          stroke={ink}
+          strokeWidth={1.4}
+          strokeLinejoin="round"
+        />
+        {/* 顶部彩条：教案标题条 */}
+        <rect x="50" y="34" width="72" height="6" rx="2" fill={clay} />
+        {/* 结构行 1 */}
+        <rect x="50" y="52" width="90" height="4" rx="1.5" fill={ink} opacity="0.85" />
+        {/* 结构行 2 */}
+        <rect x="50" y="66" width="76" height="4" rx="1.5" fill={ink} opacity="0.55" />
+        {/* 结构行 3 */}
+        <rect x="50" y="80" width="86" height="4" rx="1.5" fill={ink} opacity="0.55" />
+        {/* 结构行 4（短一些） */}
+        <rect x="50" y="94" width="52" height="4" rx="1.5" fill={ink} opacity="0.35" />
+        {/* 装订孔（左侧两个点） */}
+        <circle cx="46" cy="60" r="1.6" fill={claySoft} />
+        <circle cx="46" cy="80" r="1.6" fill={claySoft} />
+        {/* 右下勾选：教学要点已定 */}
+        <circle cx="140" cy="112" r="10" fill={sage} />
+        <path
+          d="M134 112.5 l4 4 l8 -8"
+          fill="none"
+          stroke="#fff"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   setBookStatus,
 } from '~/libs/books';
 import { styleSuffix, COMMON_NEGATIVE, sizeForRatio } from '~/data/taxonomy';
+import { hasBlobToken, persistImage } from '~/libs/blob';
 
 export const runtime = 'nodejs';
 
@@ -60,10 +61,22 @@ export async function GET(
         .map(async (p) => {
           const r = await queryImageTask(p.task_id!);
           if (r.status === 'SUCCEEDED') {
+            // 有 Blob token 时把 24h 临时链转成永久 URL；失败退回原链，不阻塞
+            let finalUrl = r.imageUrl;
+            if (r.imageUrl && hasBlobToken()) {
+              try {
+                finalUrl = await persistImage(
+                  r.imageUrl,
+                  `book-${id}-p${p.page_index}`
+                );
+              } catch (err) {
+                console.warn('[persistImage] book page fallback', err);
+              }
+            }
             await updatePageStatus({
               pageId: p.id,
               status: 'SUCCEEDED',
-              imageUrl: r.imageUrl,
+              imageUrl: finalUrl,
             });
           } else if (r.status === 'FAILED') {
             await updatePageStatus({ pageId: p.id, status: 'FAILED' });

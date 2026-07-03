@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '~/libs/auth';
 import { queryImageTask } from '~/libs/dashscope';
 import { getWorkByTaskId, updateWorkStatus } from '~/libs/works';
+import { hasBlobToken, persistImage } from '~/libs/blob';
 
 export const runtime = 'nodejs';
 
@@ -28,11 +29,23 @@ export async function GET(
   }
 
   const result = await queryImageTask(taskId);
+  let finalUrl = result.imageUrl;
+
+  // 生成成功且配置了 Blob token 时，把 DashScope 24h 临时链转存为永久 URL。
+  // 转存失败不阻塞用户拿到结果，退回原临时链。
+  if (result.status === 'SUCCEEDED' && result.imageUrl && hasBlobToken()) {
+    try {
+      finalUrl = await persistImage(result.imageUrl, work.title || `work-${work.id}`);
+    } catch (err) {
+      console.warn('[persistImage] work fallback to temp url', err);
+    }
+  }
+
   if (result.status === 'SUCCEEDED' || result.status === 'FAILED') {
     await updateWorkStatus({
       taskId,
       status: result.status,
-      outputUrl: result.imageUrl,
+      outputUrl: finalUrl,
     });
   } else if (result.status === 'RUNNING' && work.status === 'PENDING') {
     await updateWorkStatus({ taskId, status: 'RUNNING' });
@@ -40,7 +53,7 @@ export async function GET(
 
   return NextResponse.json({
     status: result.status,
-    imageUrl: result.imageUrl,
+    imageUrl: finalUrl,
     message: result.message,
     workId: work.id,
   });
