@@ -32,3 +32,10 @@ next-env.d.ts
 picture-skill.md
 _*.mjs
 .vercel
+
+# IDE / 本地素材 / 预览页（不入库）
+.kiro/
+resources/
+design-preview.html
+game-preview.html
+logo-preview.html

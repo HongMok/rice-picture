@@ -53,7 +53,7 @@ export function TemplateGallery({
   }, [all, tab, topic, style]);
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-5xl rounded-2xl border border-cream-line bg-white/60 p-4 shadow-soft">
+    <div className="mx-auto mt-8 w-full max-w-5xl rounded-section border border-line bg-white/60 p-4">
       {/* 标题 + 类型 / 风格 tab */}
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-medium text-ink">
@@ -111,12 +111,12 @@ export function TemplateGallery({
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="aspect-[4/3] animate-pulse rounded-xl bg-cream"
+                className="aspect-[4/3] animate-pulse rounded-card bg-paper"
               />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-ink-muted">
+          <p className="py-10 text-center text-sm text-ink-faint">
             该分类下暂无模板
           </p>
         ) : (
@@ -124,18 +124,18 @@ export function TemplateGallery({
             {filtered.map((t) => (
               <div
                 key={t.id}
-                className="group overflow-hidden rounded-xl border border-cream-line bg-white text-left transition-all hover:-translate-y-0.5 hover:border-clay/50 hover:shadow-soft"
+                className="group overflow-hidden rounded-card border border-line bg-white text-left transition-all duration-[450ms] hover:-translate-y-1 hover:border-clay/50"
               >
-                <div className="relative aspect-[4/3] w-full overflow-hidden bg-cream">
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-paper">
                   {t.coverUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={t.coverUrl}
                       alt={t.title}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="h-full w-full object-cover transition-transform duration-[450ms]"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-ink-muted">
+                    <div className="flex h-full w-full items-center justify-center text-ink-faint">
                       {t.kind === 'book' ? <BookIcon /> : <ImageIcon />}
                     </div>
                   )}
@@ -148,19 +148,19 @@ export function TemplateGallery({
                     )}
                     {t.kind === 'book' ? '绘本' : '图片'}
                   </span>
-                  {/* 悬停遮罩：查看 / 使用 */}
+                  {/* 悬停遮罩：查看 / 做同款 */}
                   <div className="absolute inset-0 flex items-center justify-center gap-2 bg-ink/45 opacity-0 backdrop-blur-[1px] transition-opacity group-hover:opacity-100">
                     <button
                       onClick={() => setViewId(t.id)}
-                      className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-ink shadow-soft transition-transform hover:scale-105"
+                      className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-ink transition-colors duration-[450ms]"
                     >
                       查看
                     </button>
                     <button
                       onClick={() => onPick(t)}
-                      className="rounded-full bg-clay px-3 py-1.5 text-xs font-medium text-white shadow-soft transition-transform hover:scale-105"
+                      className="rounded-full bg-clay px-3 py-1.5 text-xs font-medium text-white transition-colors duration-[450ms]"
                     >
-                      使用
+                      做同款
                     </button>
                   </div>
                 </div>
@@ -172,7 +172,7 @@ export function TemplateGallery({
                     {t.title}
                   </p>
                   {t.subtitle && (
-                    <p className="truncate text-xs text-ink-muted">
+                    <p className="truncate text-xs text-ink-faint">
                       {t.subtitle}
                     </p>
                   )}
@@ -211,7 +211,7 @@ function SegTab({
       onClick={onClick}
       className={clsx(
         'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-        active ? 'bg-ink text-white' : 'text-ink-soft hover:bg-cream'
+        active ? 'bg-ink text-white' : 'text-ink-soft hover:bg-paper'
       )}
     >
       {children}
@@ -235,7 +235,7 @@ function Chip({
         'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
         active
           ? 'border-clay bg-clay text-white'
-          : 'border-cream-line bg-white text-ink-soft hover:border-clay/40'
+          : 'border-line bg-white text-ink-soft hover:border-clay/40'
       )}
     >
       {children}

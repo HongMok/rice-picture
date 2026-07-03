@@ -12,6 +12,7 @@ export interface Child {
   strengths: string[];
   weaknesses: string[];
   interests: string[];
+  total_points: number;
 }
 
 export async function createChild(params: {
@@ -90,4 +91,12 @@ export async function listChildren(userId: number, limit = 50): Promise<Child[]>
     'select * from children where user_id = $1 order by created_at desc limit $2',
     [userId, limit]
   );
+}
+
+export async function deleteChild(id: number, userId: number): Promise<boolean> {
+  const rows = await query<{ id: number }>(
+    'delete from children where id = $1 and user_id = $2 returning id',
+    [id, userId]
+  );
+  return rows.length > 0;
 }

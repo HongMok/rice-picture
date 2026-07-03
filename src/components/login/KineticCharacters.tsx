@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * 会做表情的卡通角色群（复刻 kinetic-auth 交互，配色改为米图暖色系）。
+ * 会做表情的卡通角色群（复刻 kinetic-auth 交互，配色改为小禾AI暖色系）。
  * - idle：眼珠跟随鼠标（atan2 角度 → translate）
  * - typing：聚焦邮箱/悬停时，嘴巴变圆
  * - side：悬停密码框，眼珠左移 + 侧嘴
@@ -91,12 +91,12 @@ function Character({
   );
 }
 
-// 米图暖色系四色
+// 小禾绿系四色（深浅+一点点缀）
 const COLORS = {
-  rectangle: '#c96a3c', // 深陶橙
-  box: '#8a5a3c', // 暖棕
-  semicircle: '#7fa27e', // 柔绿
-  cylinder: '#e6b34a', // 暖黄
+  rectangle: '#5E8A6E', // 深禾绿
+  box: '#7FA98B', // 主禾绿
+  semicircle: '#B7D3B8', // 嫩芽绿
+  cylinder: '#E6B34A', // 暖黄点缀
 };
 
 export function KineticCharacters({

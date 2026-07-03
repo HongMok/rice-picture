@@ -1,7 +1,20 @@
 // 互动游戏共享类型（前后端共用）
 // game.rounds（DB jsonb）↔ 出题 JSON ↔ GamePlayer props 都用这里的接口
 
-export type GameType = 'emotion' | 'match';
+export type GameType = 'emotion' | 'match' | 'catch-butterfly' | 'whack-a-mole';
+
+/** quiz=现有AI出题四选一；reflex=实时反应/精细动作类，纯前端不经过出题/生图管线 */
+export type GameEngine = 'quiz' | 'reflex';
+
+export const GAME_ENGINE: Record<GameType, GameEngine> = {
+  emotion: 'quiz',
+  match: 'quiz',
+  'catch-butterfly': 'reflex',
+  'whack-a-mole': 'reflex',
+};
+
+export const DIFFICULTIES = ['入门', '简单', '中等', '困难', '专家'] as const;
+export type Difficulty = (typeof DIFFICULTIES)[number];
 
 /** 情绪识别：看情境句，从表情选项里选出对应情绪 */
 export interface EmotionRound {
@@ -73,7 +86,59 @@ export const GAME_META: Record<
     emoji: '🍎',
     subtitle: '看看上面的东西，从下面找出同一类的',
   },
+  'catch-butterfly': {
+    name: '捉蝴蝶',
+    emoji: '🦋',
+    subtitle: '专注力与手眼协调训练',
+  },
+  'whack-a-mole': {
+    name: '打地鼠',
+    emoji: '🐹',
+    subtitle: '精细动作与反应力训练',
+  },
 };
+
+/** reflex 引擎按难度调节的参数表：数量越多/速度越快/存活越短 = 越难。
+ *  hitScore 固定不随难度变，靠"手速要求"天然拉开分差；
+ *  theoreticalMax 是该时长内高密度全命中的估算满分，用于结算算星级占比。 */
+export interface ReflexDifficultyParams {
+  /** 场上同时存在的目标数量 */
+  concurrent: number;
+  /** 目标存活时长（ms），越短越难 */
+  lifetimeMs: number;
+  /** 新目标生成间隔（ms），越短越难 */
+  spawnIntervalMs: number;
+  /** 单次命中得分（各难度一致） */
+  hitScore: number;
+  /** 该难度理论满分（结算算星级占比用） */
+  theoreticalMax: number;
+}
+
+export const GAME_DURATION_MS = 120_000; // 固定 2 分钟倒计时
+
+export const REFLEX_DIFFICULTY: Record<Difficulty, ReflexDifficultyParams> = {
+  入门: { concurrent: 1, lifetimeMs: 3200, spawnIntervalMs: 1600, hitScore: 10, theoreticalMax: 450 },
+  简单: { concurrent: 2, lifetimeMs: 2600, spawnIntervalMs: 1300, hitScore: 10, theoreticalMax: 620 },
+  中等: { concurrent: 2, lifetimeMs: 2000, spawnIntervalMs: 1000, hitScore: 10, theoreticalMax: 820 },
+  困难: { concurrent: 3, lifetimeMs: 1500, spawnIntervalMs: 800, hitScore: 10, theoreticalMax: 1050 },
+  专家: { concurrent: 3, lifetimeMs: 1100, spawnIntervalMs: 600, hitScore: 10, theoreticalMax: 1300 },
+};
+
+/** 按最终得分占该难度理论满分的比例定星级 */
+export function starsForScore(score: number, difficulty: Difficulty): 1 | 2 | 3 {
+  const ratio = score / REFLEX_DIFFICULTY[difficulty].theoreticalMax;
+  if (ratio >= 0.8) return 3;
+  if (ratio >= 0.5) return 2;
+  return 1;
+}
+
+export interface ReflexGameResult {
+  score: number;
+  stars: 1 | 2 | 3;
+  difficulty: Difficulty;
+  hits: number;
+  misses: number;
+}
 
 export const DIAGNOSES = ['自闭症谱系(ASD)', '智力发育迟缓', '注意力缺陷(ADHD)', '发育迟缓', '其他'];
 export const SEVERITIES = ['轻度', '中度', '重度'];

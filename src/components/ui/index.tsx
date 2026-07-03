@@ -16,12 +16,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={clsx(
-          'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+          'inline-flex items-center justify-center gap-2 rounded-card px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
           variant === 'primary' &&
-            'bg-clay text-white shadow-soft hover:bg-clay/90 active:bg-clay',
+            'bg-clay text-white hover:bg-clay/90 active:bg-clay',
           variant === 'outline' &&
-            'border border-cream-line bg-white text-ink hover:bg-cream',
-          variant === 'ghost' && 'text-ink-soft hover:bg-clay-soft',
+            'border border-line bg-white text-ink hover:bg-paper',
+          variant === 'ghost' && 'text-ink-soft hover:bg-clay-mist',
           className
         )}
         {...rest}
@@ -42,7 +42,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     <input
       ref={ref}
       className={clsx(
-        'w-full rounded-xl border border-cream-line bg-white px-4 py-3 text-sm text-ink placeholder:text-ink-muted/60 outline-none transition-colors focus:border-clay',
+        'w-full rounded-input border border-line bg-white px-4 py-3 text-sm text-ink placeholder:text-ink-faint/60 outline-none transition-colors focus:border-clay',
         className
       )}
       {...rest}
@@ -59,7 +59,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     <textarea
       ref={ref}
       className={clsx(
-        'w-full resize-none rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm text-ink placeholder:text-neutral-400 outline-none transition-colors focus:border-ink',
+        'w-full resize-none rounded-input border border-line bg-white px-4 py-3 text-sm text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-sage',
         className
       )}
       {...rest}
@@ -72,7 +72,7 @@ Textarea.displayName = 'Textarea';
 export function Spinner({ className }: { className?: string }) {
   return (
     <svg
-      className={clsx('animate-spin', className)}
+      className={clsx('animate-breathe', className)}
       viewBox="0 0 24 24"
       fill="none"
     >

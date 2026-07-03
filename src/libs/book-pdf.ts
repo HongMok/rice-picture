@@ -71,7 +71,7 @@ export async function exportBookPdf(title: string, pages: ReaderPage[]) {
   const W = doc.internal.pageSize.getWidth(); // 297
   const H = doc.internal.pageSize.getHeight(); // 210
 
-  const SUBTITLE = '米图 特需儿童康复绘本';
+  const SUBTITLE = '小禾AI 特需儿童康复绘本';
   // 注册中文字体子集（含标题+副标题+所有页文字）
   const allText = title + SUBTITLE + pages.map((p) => p.text || '').join('');
   const cn = await registerChineseFont(doc, allText);

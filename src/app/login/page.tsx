@@ -5,10 +5,10 @@ import { LoginForm } from '~/components/login/LoginForm';
 
 export default async function LoginPage() {
   const user = await getCurrentUser();
-  if (user) redirect('/app');
+  if (user) redirect('/app/toolbox');
 
   return (
-    <main className="min-h-screen bg-cream">
+    <main className="min-h-screen bg-paper">
       <Suspense>
         <LoginForm />
       </Suspense>

@@ -3,10 +3,17 @@ import { listBooksWithCover } from '~/libs/books';
 import { listWorks } from '~/libs/works';
 import { Workbench } from '~/components/app/Workbench';
 import type { LibItem } from '~/components/app/Sidebar';
+import type { ModuleKey } from '~/components/app/ModuleNav';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AppPage() {
+const VALID_PANELS: ModuleKey[] = ['image', 'book', 'game', 'video'];
+
+export default async function AppPage({
+  searchParams,
+}: {
+  searchParams: { panel?: string; open?: string };
+}) {
   const user = await getCurrentUser();
   const [books, works] = user
     ? await Promise.all([listBooksWithCover(user.id), listWorks(user.id)])
@@ -29,5 +36,18 @@ export default async function AppPage() {
     })),
   ];
 
-  return <Workbench initialItems={items} />;
+  const initialPanel = VALID_PANELS.includes(searchParams.panel as ModuleKey)
+    ? (searchParams.panel as ModuleKey)
+    : undefined;
+
+  const openRaw = Number(searchParams.open);
+  const initialOpenId = Number.isInteger(openRaw) && openRaw > 0 ? openRaw : undefined;
+
+  return (
+    <Workbench
+      initialItems={items}
+      initialPanel={initialPanel}
+      initialOpenId={initialOpenId}
+    />
+  );
 }

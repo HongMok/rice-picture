@@ -8,6 +8,8 @@ import {
   type EmotionRound,
   type MatchRound,
 } from '~/data/game-types';
+import { spawnFloatText, spawnParticles, spawnComboBadge } from '~/components/app/games/effects';
+import { playCoin, playCombo, unlockAudio } from '~/components/app/games/reflex-sound';
 
 const PRAISE = ['太棒了！', '答对啦！', '真聪明！', '做得好！', '就是这个！'];
 const RETRY = ['没关系，再想一想～', '再看看图，你可以的', '慢慢来，再试一次'];
@@ -78,6 +80,9 @@ export function unlockTts() {
   }
 }
 
+/** 认知类每答对一题奖励的金币基数（连击时会额外加成） */
+const COIN_PER_CORRECT = 10;
+
 export function GamePlayer({
   game,
   onExit,
@@ -91,7 +96,10 @@ export function GamePlayer({
   const [wrong, setWrong] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'retry'; msg: string } | null>(null);
   const [stars, setStars] = useState(0);
+  const [coins, setCoins] = useState(0);
+  const [combo, setCombo] = useState(0);
   const [done, setDone] = useState(false);
+  const [totalPoints, setTotalPoints] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const rounds = game.rounds;
@@ -115,20 +123,33 @@ export function GamePlayer({
 
   if (done) {
     return (
-      <div className="mx-auto max-w-md rounded-2xl border border-cream-line bg-white p-10 text-center shadow-soft animate-fade-in">
+      <div className="mx-auto max-w-md rounded-section border border-line bg-white p-10 text-center animate-fade-in">
         <div className="mb-2 animate-float text-6xl">🌈</div>
-        <h2 className="text-2xl font-bold text-ink">全部完成啦！</h2>
-        <p className="mt-1 text-sm text-ink-muted">
+        <h2 className="text-2xl text-ink">全部完成啦！</h2>
+        <p className="mt-1 text-sm text-ink-faint">
           在《{game.title}》里表现得很棒
         </p>
-        <div className="mx-auto my-6 inline-flex items-center gap-2 rounded-2xl bg-clay-soft px-5 py-2.5 text-lg font-bold text-clay">
-          <StarIcon /> +{stars} 颗星星
+        <div className="my-5 flex items-center justify-center gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-clay-mist px-4 py-1.5 text-sm font-medium text-clay">
+            <StarIcon /> {stars} 颗星
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF6DE] px-4 py-1.5 text-sm font-medium text-[#B88515]">
+            🪙 +{coins}
+          </span>
         </div>
+        {typeof totalPoints === 'number' && (
+          <p className="mb-4 text-xs text-ink-faint">
+            累计金币 <span className="font-medium text-[#B88515]">🪙 {totalPoints}</span>
+          </p>
+        )}
         <div className="flex justify-center gap-3">
           <Button
             onClick={() => {
               setIdx(0);
               setStars(0);
+              setCoins(0);
+              setCombo(0);
+              setTotalPoints(null);
               setDone(false);
               setPicked(null);
               setFeedback(null);
@@ -157,7 +178,7 @@ export function GamePlayer({
     return { emoji: null, label: opt };
   }
 
-  function choose(opt: string) {
+  function choose(opt: string, e: React.MouseEvent<HTMLButtonElement>) {
     if (locked) return;
     if (opt === round.answer) {
       setLocked(true);
@@ -168,9 +189,29 @@ export function GamePlayer({
       setStars((s) => s + 1);
       speak(msg);
       flyStars();
+
+      // 金币 / 连击 / 飘字 / 粒子
+      const nextCombo = combo + 1;
+      setCombo(nextCombo);
+      const bonus = nextCombo >= 3 && nextCombo % 3 === 0 ? Math.floor(COIN_PER_CORRECT / 2) : 0;
+      const gained = COIN_PER_CORRECT + bonus;
+      setCoins((c) => c + gained);
+      unlockAudio();
+      playCoin(true);
+
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      spawnFloatText(cx, cy, `+${gained} 🪙`, '#B88515');
+      spawnParticles(cx, cy, 8);
+      if (bonus > 0) {
+        spawnComboBadge(containerRef.current, nextCombo);
+        playCombo(true, nextCombo);
+      }
     } else {
-      // 无惩罚：只提示，不锁死、不扣星
+      // 无惩罚：只提示，不锁死、不扣星；断连击
       setWrong(opt);
+      setCombo(0);
       const msg = RETRY[idx % RETRY.length];
       setFeedback({ kind: 'retry', msg });
       speak(msg);
@@ -188,6 +229,21 @@ export function GamePlayer({
     } else {
       setDone(true);
       speak('全部完成啦，你真棒！');
+      // 结算上报：金币累计到孩子（后端会根据 game.child_id 判定）
+      const ratio = total > 0 ? stars / total : 0; // stars 这里其实是答对题数
+      const finalStars: 1 | 2 | 3 = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
+      fetch(`/api/games/${game.id}/finish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ score: coins, stars: finalStars }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d && typeof d.totalPoints === 'number') setTotalPoints(d.totalPoints);
+        })
+        .catch(() => {
+          /* 静默：不影响本地已展示的结算画面 */
+        });
     }
   }
 
@@ -209,36 +265,48 @@ export function GamePlayer({
 
   return (
     <div ref={containerRef} className="mx-auto max-w-lg animate-fade-in">
+      {/* 顶栏：金币 + 连击 */}
+      <div className="mb-3 flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF6DE] px-3 py-1 text-sm font-medium text-[#B88515]">
+          🪙 {coins}
+        </span>
+        {combo >= 2 && (
+          <span className="rounded-full bg-[#FFE7CC] px-2.5 py-1 text-xs font-medium text-[#C7681A]">
+            连击 ×{combo}
+          </span>
+        )}
+      </div>
+
       {/* 进度点 */}
       <div className="mb-4 flex gap-2">
         {rounds.map((_, i) => (
           <div
             key={i}
             className={
-              'h-2 flex-1 rounded-full transition-colors ' +
-              (i < idx ? 'bg-sage' : i === idx ? 'bg-clay' : 'bg-cream-line')
+              'h-2 flex-1 rounded-full transition-colors duration-[450ms] ' +
+              (i < idx ? 'bg-sage' : i === idx ? 'bg-clay' : 'bg-line')
             }
           />
         ))}
       </div>
 
       {/* 情境卡 */}
-      <div className="relative rounded-2xl bg-clay-soft p-6 text-center">
+      <div className="relative rounded-section bg-clay-mist p-6 text-center">
         <button
           onClick={() => speak(readText)}
-          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-clay shadow-soft active:scale-90"
+          className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-card bg-white text-clay transition-colors duration-[450ms] hover:bg-paper-deep"
           title="读一读"
           aria-label="读一读"
         >
           <SpeakerIcon />
         </button>
-        <p className="mb-4 text-sm font-semibold text-ink-soft">
+        <p className="mb-4 text-sm font-medium text-ink-soft">
           {isEmotion ? '他现在是什么心情？' : '找出同一类 / 同颜色的'}
         </p>
         <div
           className={
-            'mx-auto flex items-center justify-center overflow-hidden bg-white shadow-soft ' +
-            (isEmotion ? 'h-36 w-36 rounded-full text-7xl' : 'h-36 w-36 rounded-2xl text-6xl')
+            'mx-auto flex items-center justify-center overflow-hidden bg-white ' +
+            (isEmotion ? 'h-36 w-36 rounded-full text-7xl' : 'h-36 w-36 rounded-card text-6xl')
           }
         >
           {sceneImg ? (
@@ -248,7 +316,7 @@ export function GamePlayer({
             <span>{sceneEmoji}</span>
           ) : (
             // 配对题无图时用目标物名字兜底
-            <span className="px-2 text-center text-xl font-bold text-ink">
+            <span className="px-2 text-center text-xl text-ink">
               {(round as MatchRound).label}
             </span>
           )}
@@ -266,27 +334,27 @@ export function GamePlayer({
           return (
             <button
               key={i}
-              onClick={() => choose(opt)}
+              onClick={(e) => choose(opt, e)}
               disabled={dim}
               className={
-                'flex min-h-[104px] flex-col items-center justify-center gap-2 rounded-2xl border-2 p-4 transition-all active:scale-95 ' +
+                'flex min-h-[104px] flex-col items-center justify-center gap-2 rounded-card border-2 p-4 transition-colors duration-[450ms] ' +
                 (isCorrect
-                  ? 'border-sage bg-sage-soft'
+                  ? 'border-sage bg-sage-mist'
                   : isWrong
                   ? 'border-[#e0b45b] bg-[#faf1dd] animate-game-shake'
                   : dim
-                  ? 'border-cream-line opacity-40'
-                  : 'border-cream-line bg-white hover:border-clay')
+                  ? 'border-line opacity-40'
+                  : 'border-line bg-white hover:border-clay')
               }
             >
               {f.emoji ? (
                 <>
                   <span className="text-4xl leading-none">{f.emoji}</span>
-                  <span className="text-sm font-semibold text-ink-soft">{f.label}</span>
+                  <span className="text-sm font-medium text-ink-soft">{f.label}</span>
                 </>
               ) : (
                 // 配对题选项：无图，文字放大更醒目
-                <span className="text-lg font-bold text-ink">{f.label}</span>
+                <span className="text-lg text-ink">{f.label}</span>
               )}
             </button>
           );
@@ -298,7 +366,7 @@ export function GamePlayer({
         {feedback && (
           <p
             className={
-              'text-base font-bold ' +
+              'text-base font-medium ' +
               (feedback.kind === 'ok' ? 'text-sage' : 'text-[#c88a2e]')
             }
           >

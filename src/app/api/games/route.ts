@@ -4,7 +4,7 @@ import { getChild } from '~/libs/children';
 import { generateGame, describeCharacter } from '~/libs/game-gen';
 import { resolveImage, type ImageSpec } from '~/libs/game-images';
 import { createGame, setGameRounds, setGameStatus, listGames } from '~/libs/games';
-import type { GameType, EmotionRound, MatchRound } from '~/data/game-types';
+import { GAME_ENGINE, type GameType, type EmotionRound, type MatchRound } from '~/data/game-types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -20,17 +20,32 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
-  let body: { childId?: number; gameType?: GameType; roundCount?: number };
+  let body: { childId?: number; gameType?: GameType; roundCount?: number; difficulty?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: '请求格式错误' }, { status: 400 });
   }
 
+  const childId = Number.isFinite(body.childId) ? Number(body.childId) : null;
+
+  // reflex 类游戏（捉蝴蝶/打地鼠）：纯前端玩法，不出题不生图，
+  //   建一条 BUILDING→READY 的空局记录，供结束后 finish 接口写回分数。
+  if (body.gameType && GAME_ENGINE[body.gameType] === 'reflex') {
+    const gameType = body.gameType;
+    const game = await createGame({
+      userId: user.id,
+      childId,
+      gameType,
+      config: { gameType, childId, difficulty: body.difficulty || null },
+    });
+    await setGameStatus(game.id, 'READY');
+    return NextResponse.json({ gameId: game.id, gameType, status: 'READY' });
+  }
+
   const gameType: GameType = body.gameType === 'match' ? 'match' : 'emotion';
   // 默认 3 题：减少一轮要生成的图片数量，缩短出图等待
   const roundCount = Math.min(Math.max(Number(body.roundCount) || 3, 3), 6);
-  const childId = Number.isFinite(body.childId) ? Number(body.childId) : null;
   const child = childId ? await getChild(childId, user.id) : null;
 
   // 1) 建游戏记录

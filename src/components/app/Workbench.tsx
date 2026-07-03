@@ -1,18 +1,19 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Sidebar,
-  useSidebarCollapsed,
-  type LibItem,
-} from '~/components/app/Sidebar';
-import { Composer, type ComposerState, type Mode } from '~/components/app/Composer';
+import type { LibItem } from '~/components/app/Sidebar';
+import type { ModuleKey } from '~/components/app/ModuleNav';
+import { Composer, type ComposerState } from '~/components/app/Composer';
 import { TemplateGallery, type TemplateItem } from '~/components/app/TemplateGallery';
 import { BookProgress } from '~/components/app/BookProgress';
 import { BookReader, type ReaderPage } from '~/components/app/BookReader';
 import { GameStudio } from '~/components/app/GameStudio';
+import { VideoStudio } from '~/components/app/VideoStudio';
+import { PanelBackProvider, usePanelBack } from '~/components/app/PanelBack';
 import { Button, Spinner } from '~/components/ui';
-import { DownloadIcon, BookIcon, MenuIcon, SparkleIcon } from '~/components/ui/icons';
+import { DownloadIcon, BookIcon, ChevronLeftIcon, SparkleIcon } from '~/components/ui/icons';
+import { toolByKey } from '~/data/tools';
 import { DEFAULT_RATIO, DEFAULT_PAGE_COUNT } from '~/data/taxonomy';
 import { exportBookPdf } from '~/libs/book-pdf';
 
@@ -23,10 +24,18 @@ type Stage =
   | { kind: 'book-generating'; bookId: number; title: string }
   | { kind: 'book-done'; bookId: number; title: string };
 
-export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
+export function Workbench({
+  initialItems,
+  initialPanel,
+  initialOpenId,
+}: {
+  initialItems: LibItem[];
+  initialPanel?: ModuleKey;
+  initialOpenId?: number;
+}) {
   const [items, setItems] = useState<LibItem[]>(initialItems);
   const [composer, setComposer] = useState<ComposerState>({
-    mode: 'image',
+    mode: initialPanel === 'book' ? 'book' : 'image',
     brief: '',
     styleKey: 'warm',
     ratio: DEFAULT_RATIO,
@@ -40,10 +49,8 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
   const [readerOpen, setReaderOpen] = useState(false);
   const [readerTitle, setReaderTitle] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [panel, setPanel] = useState<'create' | 'game'>('create');
-  const { collapsed, toggle } = useSidebarCollapsed();
+  const panel: ModuleKey = initialPanel || 'image';
 
   async function downloadPdf(title: string) {
     setPdfBusy(true);
@@ -263,6 +270,19 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
     }
   }
 
+  /* ---------- 通过 URL ?open=<id> 自动打开一次 ---------- */
+  const openedRef = useRef(false);
+  useEffect(() => {
+    if (openedRef.current) return;
+    if (!initialOpenId) return;
+    const wantKind: LibItem['kind'] = panel === 'book' ? 'book' : 'image';
+    const it = items.find((x) => x.id === initialOpenId && x.kind === wantKind);
+    if (!it) return;
+    openedRef.current = true;
+    openItem(it);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenId, panel, items]);
+
   function newCreation() {
     clearTimer();
     setGenerating(false);
@@ -271,58 +291,21 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
     patch({ brief: '' });
   }
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-cream">
-      <Sidebar
-        items={items}
-        activeId={activeId}
-        onNew={newCreation}
-        onOpen={openItem}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        collapsed={collapsed}
-        onToggleCollapse={toggle}
-      />
+  const tool = toolByKey(panel);
 
+  return (
+    <PanelBackProvider>
+    <div className="flex h-full overflow-hidden bg-paper">
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* 移动端顶栏 */}
-        <header className="flex h-14 items-center gap-3 border-b border-cream-line px-4 md:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-1.5 text-ink-soft hover:bg-cream"
-            aria-label="菜单"
-          >
-            <MenuIcon />
-          </button>
-          <span className="text-sm font-bold">
-            米<span className="text-clay">图</span>
-          </span>
-        </header>
+        {/* 顶栏：返回（若子模块注册了 override 则先调它，否则回工具箱）+ 当前工具名 */}
+        <PanelHeader tool={tool} />
+
 
         <main className="flex-1 overflow-y-auto px-6 py-8 md:px-10">
-          {/* 顶部：创作 / 游戏 切换 */}
-          <div className="mx-auto mb-6 flex w-fit gap-1 rounded-xl border border-cream-line bg-white p-1">
-            {(
-              [
-                ['create', '图卡 / 绘本'],
-                ['game', '互动游戏'],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setPanel(key)}
-                className={
-                  'rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ' +
-                  (panel === key ? 'bg-clay text-white' : 'text-ink-soft hover:bg-cream')
-                }
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
           {panel === 'game' ? (
             <GameStudio />
+          ) : panel === 'video' ? (
+            <VideoStudio />
           ) : (
             <>
           {/* 生成区 */}
@@ -336,16 +319,16 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
           {/* 结果 / 进度 */}
           <div className="mx-auto mt-6 w-full max-w-3xl">
             {stage.kind === 'image-loading' && (
-              <div className="flex flex-col items-center rounded-2xl border border-cream-line bg-white p-10 shadow-soft">
+              <div className="flex flex-col items-center rounded-section border border-line bg-white p-10">
                 <Spinner className="h-8 w-8 text-clay" />
                 <p className="mt-3 text-sm text-ink-soft">{stage.label}</p>
-                <p className="mt-1 text-xs text-ink-muted">通常需要 10～30 秒</p>
+                <p className="mt-1 text-xs text-ink-faint">通常需要 10～30 秒</p>
               </div>
             )}
 
             {stage.kind === 'image-done' && (
-              <div className="rounded-2xl border border-cream-line bg-white p-4 shadow-soft">
-                <div className="overflow-hidden rounded-xl border border-cream-line">
+              <div className="rounded-section border border-line bg-white p-4">
+                <div className="overflow-hidden rounded-card border border-line">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={stage.url} alt={stage.title} className="w-full" />
                 </div>
@@ -371,7 +354,7 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
                     </a>
                   </div>
                 </div>
-                <p className="mt-2 text-center text-[11px] text-ink-muted">
+                <p className="mt-2 text-center text-[11px] text-ink-faint">
                   图片链接有效期约 24 小时，请及时下载保存
                 </p>
               </div>
@@ -444,5 +427,40 @@ export function Workbench({ initialItems }: { initialItems: LibItem[] }) {
         />
       )}
     </div>
+    </PanelBackProvider>
+  );
+}
+
+function PanelHeader({ tool }: { tool: ReturnType<typeof toolByKey> }) {
+  const override = usePanelBack();
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4 md:px-6">
+      {override ? (
+        <button
+          onClick={override}
+          className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-sm text-ink-soft transition-colors duration-[450ms] ease-out hover:bg-paper-deep hover:text-ink"
+        >
+          <ChevronLeftIcon width={16} height={16} />
+          <span>返回</span>
+        </button>
+      ) : (
+        <Link
+          href="/app/toolbox"
+          className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-sm text-ink-soft transition-colors duration-[450ms] ease-out hover:bg-paper-deep hover:text-ink"
+        >
+          <ChevronLeftIcon width={16} height={16} />
+          <span>返回</span>
+        </Link>
+      )}
+      {tool && (
+        <>
+          <span className="mx-1 text-ink-faint">/</span>
+          <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
+            <tool.icon width={16} height={16} className="text-clay" />
+            {tool.name}
+          </span>
+        </>
+      )}
+    </header>
   );
 }

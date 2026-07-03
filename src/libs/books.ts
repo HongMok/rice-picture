@@ -93,10 +93,11 @@ export async function getBook(
   bookId: number,
   userId: number
 ): Promise<Book | null> {
-  return queryOne<Book>('select * from books where id = $1 and user_id = $2', [
-    bookId,
-    userId,
-  ]);
+  return queryOne<Book>(
+    `select * from books
+      where id = $1 and user_id = $2 and deleted_at is null`,
+    [bookId, userId]
+  );
 }
 
 export async function getBookPages(bookId: number): Promise<BookPage[]> {
@@ -108,7 +109,10 @@ export async function getBookPages(bookId: number): Promise<BookPage[]> {
 
 export async function listBooks(userId: number, limit = 50): Promise<Book[]> {
   return query<Book>(
-    'select * from books where user_id = $1 order by created_at desc limit $2',
+    `select * from books
+      where user_id = $1 and deleted_at is null
+      order by created_at desc
+      limit $2`,
     [userId, limit]
   );
 }
@@ -124,9 +128,35 @@ export async function listBooksWithCover(
              where p.book_id = b.id and p.image_url is not null
              order by p.page_index asc limit 1) as cover_url
      from books b
-     where b.user_id = $1
+     where b.user_id = $1 and b.deleted_at is null
      order by b.created_at desc
      limit $2`,
     [userId, limit]
   );
+}
+
+export async function updateBookTitle(
+  id: number,
+  userId: number,
+  title: string
+): Promise<Book | null> {
+  return queryOne<Book>(
+    `update books set title = $1, updated_at = now()
+      where id = $2 and user_id = $3 and deleted_at is null
+      returning *`,
+    [title, id, userId]
+  );
+}
+
+export async function softDeleteBook(
+  id: number,
+  userId: number
+): Promise<boolean> {
+  const row = await queryOne<{ id: number }>(
+    `update books set deleted_at = now(), updated_at = now()
+      where id = $1 and user_id = $2 and deleted_at is null
+      returning id`,
+    [id, userId]
+  );
+  return !!row;
 }

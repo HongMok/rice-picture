@@ -63,15 +63,45 @@ export async function getWorkById(
   id: number,
   userId: number
 ): Promise<Work | null> {
-  return queryOne<Work>('select * from works where id = $1 and user_id = $2', [
-    id,
-    userId,
-  ]);
+  return queryOne<Work>(
+    `select * from works
+      where id = $1 and user_id = $2 and deleted_at is null`,
+    [id, userId]
+  );
 }
 
 export async function listWorks(userId: number, limit = 50): Promise<Work[]> {
   return query<Work>(
-    'select * from works where user_id = $1 order by created_at desc limit $2',
+    `select * from works
+      where user_id = $1 and deleted_at is null
+      order by created_at desc
+      limit $2`,
     [userId, limit]
   );
+}
+
+export async function updateWorkTitle(
+  id: number,
+  userId: number,
+  title: string
+): Promise<Work | null> {
+  return queryOne<Work>(
+    `update works set title = $1, updated_at = now()
+      where id = $2 and user_id = $3 and deleted_at is null
+      returning *`,
+    [title, id, userId]
+  );
+}
+
+export async function softDeleteWork(
+  id: number,
+  userId: number
+): Promise<boolean> {
+  const row = await queryOne<{ id: number }>(
+    `update works set deleted_at = now()
+      where id = $1 and user_id = $2 and deleted_at is null
+      returning id`,
+    [id, userId]
+  );
+  return !!row;
 }

@@ -1,6 +1,5 @@
 'use client';
 
-import clsx from 'clsx';
 import { useUser } from '~/context/user-context';
 import {
   STYLES,
@@ -9,8 +8,6 @@ import {
 } from '~/data/taxonomy';
 import { Button, Textarea } from '~/components/ui';
 import {
-  BookIcon,
-  ImageIcon,
   PagesIcon,
   RatioIcon,
   SparkleIcon,
@@ -45,35 +42,19 @@ export function Composer({
     <div className="mx-auto w-full max-w-3xl">
       {/* 标题 */}
       <div className="mb-5 text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-ink">
+        <h1 className="text-2xl tracking-tight text-ink">
           {user?.nickname || user?.username}
-          ，今天想创作点什么？
+          ，今天想创作点{state.mode === 'image' ? '图卡' : '绘本'}？
         </h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          面向特需儿童康复的图卡与绘本生成
+        <p className="mt-1 text-sm text-ink-faint">
+          {state.mode === 'image'
+            ? '面向特需儿童康复的图卡生成'
+            : '面向特需儿童康复的绘本生成'}
         </p>
       </div>
 
-      {/* 模式切换 */}
-      <div className="mb-3 flex justify-center">
-        <div className="inline-flex rounded-full border border-cream-line bg-white p-1">
-          <ModeTab
-            active={state.mode === 'image'}
-            onClick={() => setState({ mode: 'image' })}
-            icon={<ImageIcon width={16} height={16} />}
-            label="图片"
-          />
-          <ModeTab
-            active={state.mode === 'book'}
-            onClick={() => setState({ mode: 'book' })}
-            icon={<BookIcon width={16} height={16} />}
-            label="绘本"
-          />
-        </div>
-      </div>
-
       {/* 输入卡片 */}
-      <div className="rounded-2xl border border-cream-line bg-white p-4 shadow-soft">
+      <div className="rounded-section border border-line bg-white p-4">
         <Textarea
           rows={4}
           value={state.brief}
@@ -88,7 +69,7 @@ export function Composer({
         />
 
         {/* 操作标签行 */}
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-cream-line pt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
           {/* 风格 */}
           <TagSelect
             icon={<StyleIcon width={15} height={15} />}
@@ -120,7 +101,7 @@ export function Composer({
           )}
 
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-ink-muted">
+            <span className="text-xs text-ink-faint">
               {state.brief.length}/500
             </span>
             <Button
@@ -136,31 +117,6 @@ export function Composer({
         </div>
       </div>
     </div>
-  );
-}
-
-function ModeTab({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={clsx(
-        'flex items-center gap-1.5 rounded-full px-5 py-1.5 text-sm font-medium transition-colors',
-        active ? 'bg-clay text-white shadow-soft' : 'text-ink-soft hover:text-ink'
-      )}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
 
@@ -180,9 +136,9 @@ function TagSelect({
 }) {
   const current = options.find((o) => o.value === value)?.label || '';
   return (
-    <label className="relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-cream-line bg-cream px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-clay/50">
-      <span className="text-ink-muted">{icon}</span>
-      <span className="text-ink-muted">{label}</span>
+    <label className="relative inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 text-xs text-ink-soft transition-colors hover:border-clay/50">
+      <span className="text-ink-faint">{icon}</span>
+      <span className="text-ink-faint">{label}</span>
       <span className="font-medium text-ink">{current}</span>
       <select
         value={value}

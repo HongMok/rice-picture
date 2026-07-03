@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   }
   // 附带常用字符，保证标点/数字/副标题可用
   const extra =
-    '米图·特需儿童康复绘本我的页第共012345678910。，、！？：；“”‘’（）—…《》';
+    '小禾AI·特需儿童康复绘本我的页第共012345678910。，、！？：；“”‘’（）—…《》';
   const chars = Array.from(new Set((text + extra).split(''))).join('');
 
   try {

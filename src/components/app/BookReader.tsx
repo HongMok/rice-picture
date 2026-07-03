@@ -51,7 +51,7 @@ export function BookReader({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm">
-      <div className="relative flex w-full max-w-4xl flex-col rounded-2xl bg-cream p-4 shadow-soft sm:p-6">
+      <div className="relative flex w-full max-w-4xl flex-col rounded-section bg-paper p-4 sm:p-6">
         {/* 关闭 + 标题 */}
         <div className="mb-3 flex items-center justify-between">
           <p className="truncate pr-4 text-sm font-medium text-ink-soft">
@@ -62,7 +62,7 @@ export function BookReader({
               <button
                 onClick={onDownloadPdf}
                 disabled={pdfBusy}
-                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:bg-clay-soft hover:text-ink disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:bg-clay-mist hover:text-ink disabled:opacity-50"
                 title="下载 PDF"
               >
                 {pdfBusy ? (
@@ -75,7 +75,7 @@ export function BookReader({
             )}
             <button
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-clay-soft hover:text-ink"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-ink-faint transition-colors hover:bg-clay-mist hover:text-ink"
               aria-label="关闭"
             >
               <CloseIcon width={18} height={18} />
@@ -89,14 +89,14 @@ export function BookReader({
           {i > 0 && (
             <button
               onClick={prev}
-              className="absolute left-0 z-10 -ml-1 flex h-11 w-11 items-center justify-center rounded-full bg-white text-ink shadow-soft transition-transform hover:scale-105 sm:-ml-5"
+              className="absolute left-0 z-10 -ml-1 flex h-11 w-11 items-center justify-center rounded-full bg-white text-ink transition-transform sm:-ml-5"
               aria-label="上一页"
             >
               <ChevronLeftIcon />
             </button>
           )}
 
-          <div className="relative w-full overflow-hidden rounded-xl border border-cream-line bg-white">
+          <div className="relative w-full overflow-hidden rounded-card border border-line bg-white">
             <div className="relative aspect-[4/3] w-full">
               {page?.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -106,13 +106,13 @@ export function BookReader({
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-cream">
+                <div className="flex h-full w-full items-center justify-center bg-paper">
                   {page?.status === 'FAILED' ? (
-                    <span className="text-sm text-ink-muted">这一页生成失败了</span>
+                    <span className="text-sm text-ink-faint">这一页生成失败了</span>
                   ) : (
                     <div className="text-center">
                       <Spinner className="mx-auto h-7 w-7 text-clay" />
-                      <p className="mt-2 text-sm text-ink-muted">这一页还在画…</p>
+                      <p className="mt-2 text-sm text-ink-faint">这一页还在画…</p>
                     </div>
                   )}
                 </div>
@@ -133,7 +133,7 @@ export function BookReader({
           {i < total - 1 && (
             <button
               onClick={next}
-              className="absolute right-0 z-10 -mr-1 flex h-11 w-11 items-center justify-center rounded-full bg-white text-ink shadow-soft transition-transform hover:scale-105 sm:-mr-5"
+              className="absolute right-0 z-10 -mr-1 flex h-11 w-11 items-center justify-center rounded-full bg-white text-ink transition-transform sm:-mr-5"
               aria-label="下一页"
             >
               <ChevronRightIcon />
@@ -149,13 +149,13 @@ export function BookReader({
               onClick={() => setI(idx)}
               className={
                 'h-1.5 rounded-full transition-all ' +
-                (idx === i ? 'w-6 bg-clay' : 'w-1.5 bg-cream-line hover:bg-clay/40')
+                (idx === i ? 'w-6 bg-clay' : 'w-1.5 bg-line hover:bg-clay/40')
               }
               aria-label={`第 ${idx + 1} 页`}
             />
           ))}
         </div>
-        <p className="mt-1 text-center text-xs text-ink-muted">
+        <p className="mt-1 text-center text-xs text-ink-faint">
           第 {i + 1} / {total} 页 · 用左右方向键翻页
         </p>
         {footer}
