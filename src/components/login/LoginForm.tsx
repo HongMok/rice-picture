@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import { CartoonMascot } from '~/components/login/CartoonMascot';
+import { KineticCharacters, type Reaction } from '~/components/login/KineticCharacters';
 import { Spinner } from '~/components/ui';
 
 export function LoginForm() {
@@ -12,17 +12,31 @@ export function LoginForm() {
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [covering, setCovering] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const [reaction, setReaction] = useState<Reaction>('idle');
+  const [tilted, setTilted] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 眼珠跟随：账号输入长度映射到 0~1（打字越多越往右看）
-  const lookRatio = Math.min(username.length / 16, 1);
+  function fail(msg: string) {
+    setError(msg);
+    setReaction('surprise');
+    setTilted(true);
+    setTimeout(() => {
+      setReaction('idle');
+      setTilted(false);
+    }, 2500);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (!username.trim() || !password.trim()) {
+      fail('请输入账号和密码');
+      return;
+    }
     setLoading(true);
+    setReaction('submit');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -31,106 +45,152 @@ export function LoginForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || '登录失败');
         setLoading(false);
+        fail(data.error || '登录失败');
         return;
       }
       router.replace(from);
       router.refresh();
     } catch {
-      setError('网络错误，请重试');
       setLoading(false);
+      fail('网络错误，请重试');
     }
   }
 
   return (
-    <div className="w-full max-w-sm">
-      {/* 熊猫探出卡片顶部 */}
-      <div className="relative z-10 flex justify-center">
-        <div className="-mb-6">
-          <CartoonMascot lookRatio={lookRatio} covering={covering} />
+    <div className="flex min-h-screen w-full">
+      {/* 左：暖棕深色艺术区 */}
+      <div className="relative hidden flex-1 items-center justify-center overflow-hidden bg-ink md:flex">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 30% 30%, rgba(224,138,91,0.18), transparent 45%), radial-gradient(circle at 70% 75%, rgba(127,162,126,0.14), transparent 45%)',
+          }}
+        />
+        <div className="relative flex h-[340px] items-end">
+          <KineticCharacters reaction={reaction} tilted={tilted} />
         </div>
       </div>
 
-      {/* 白色卡片 */}
-      <div className="relative rounded-3xl bg-white px-7 pb-8 pt-10 shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
-        <div className="mb-5 text-center">
-          <h1 className="text-lg font-bold tracking-tight text-ink">
-            米<span className="text-amber-500">图</span>
+      {/* 右：暖白表单区 */}
+      <div className="flex flex-1 items-center justify-center bg-cream px-6 py-10">
+        <div className="w-full max-w-sm">
+          {/* 移动端：小角色场景放顶部 */}
+          <div className="mb-6 flex justify-center md:hidden">
+            <div className="scale-75">
+              <KineticCharacters reaction={reaction} tilted={tilted} />
+            </div>
+          </div>
+
+          <h1 className="text-3xl font-bold tracking-tight text-ink">
+            欢迎回来！
           </h1>
-          <p className="mt-0.5 text-xs text-ink-muted">特需儿童康复 · 图卡与绘本生成</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="mb-1 block text-sm font-bold text-ink">
-              账号：
-            </label>
-            <input
-              type="text"
-              autoComplete="username"
-              placeholder="请输入账号…"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onFocus={() => setCovering(false)}
-              className="w-full border-0 border-b-2 border-amber-300 bg-transparent px-1 py-1.5 text-sm text-ink caret-amber-500 outline-none transition-colors placeholder:text-neutral-300 focus:border-amber-400"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-bold text-ink">
-              密码：
-            </label>
-            <input
-              type="password"
-              autoComplete="current-password"
-              placeholder="请输入密码…"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onFocus={() => setCovering(true)}
-              onBlur={() => setCovering(false)}
-              className="w-full border-0 border-b-2 border-amber-300 bg-transparent px-1 py-1.5 text-sm text-ink caret-amber-500 outline-none transition-colors placeholder:text-neutral-300 focus:border-amber-400"
-            />
-          </div>
+          <p className="mt-1.5 text-sm text-ink-muted">
+            登录米图 · 特需儿童康复图卡与绘本生成
+          </p>
 
           {error && (
-            <p className="animate-fade-in text-center text-sm text-red-500">
+            <div className="mt-4 animate-fade-in rounded-xl bg-clay-soft px-3 py-2 text-sm text-clay">
               {error}
-            </p>
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-amber-400 py-3 text-sm font-bold text-ink shadow-[0_6px_16px_rgba(245,180,40,0.4)] transition-colors hover:bg-amber-500 disabled:opacity-60"
-          >
-            {loading && <Spinner className="h-4 w-4" />}
-            LOGIN
-          </button>
-        </form>
-      </div>
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            {/* 账号 */}
+            <div
+              onMouseEnter={() =>
+                reaction !== 'typing' &&
+                reaction !== 'side' &&
+                setReaction('typing')
+              }
+              onMouseLeave={() => reaction === 'typing' && setReaction('idle')}
+            >
+              <label className="mb-1.5 block text-sm font-medium text-ink">
+                账号
+              </label>
+              <input
+                type="text"
+                autoComplete="username"
+                placeholder="请输入账号"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                onFocus={() => setReaction('typing')}
+                onBlur={() => setReaction('idle')}
+                className="w-full rounded-xl border border-cream-line bg-white px-4 py-3 text-sm text-ink caret-clay outline-none transition-colors placeholder:text-ink-muted/50 focus:border-clay"
+              />
+            </div>
 
-      {/* 卡片底部小脚掌装饰 */}
-      <div className="mt-3 flex justify-center gap-6">
-        <PawIcon />
-        <PawIcon />
-      </div>
+            {/* 密码 */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink">
+                密码
+              </label>
+              <div
+                className="relative"
+                onMouseEnter={() => setReaction('side')}
+                onMouseLeave={() => setReaction('idle')}
+              >
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="请输入密码"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setReaction('closed')}
+                  onBlur={() => setReaction('idle')}
+                  className="w-full rounded-xl border border-cream-line bg-white px-4 py-3 pr-11 text-sm text-ink caret-clay outline-none transition-colors placeholder:text-ink-muted/50 focus:border-clay"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPwd((v) => !v);
+                    setReaction('closed');
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+                  aria-label={showPwd ? '隐藏密码' : '显示密码'}
+                  tabIndex={-1}
+                >
+                  {showPwd ? <EyeOff /> : <EyeOn />}
+                </button>
+              </div>
+            </div>
 
-      <p className="mt-4 text-center text-xs text-ink/50">
-        演示账号 demo / demo1234
-      </p>
+            <button
+              type="submit"
+              disabled={loading}
+              onMouseEnter={() => !loading && setReaction('submit')}
+              onMouseLeave={() => !loading && setReaction('idle')}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-clay py-3 text-sm font-bold text-white shadow-soft transition-colors hover:bg-clay/90 disabled:opacity-60"
+            >
+              {loading && <Spinner className="h-4 w-4" />}
+              登录
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-xs text-ink-muted">
+            演示账号 demo / demo1234
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* 熊猫脚掌 */
-function PawIcon() {
+function EyeOn() {
   return (
-    <svg viewBox="0 0 40 40" className="h-8 w-8">
-      <ellipse cx="20" cy="26" rx="11" ry="9" fill="#2b2622" />
-      <circle cx="10" cy="14" r="4" fill="#2b2622" />
-      <circle cx="18" cy="10" r="4" fill="#2b2622" />
-      <circle cx="27" cy="12" r="4" fill="#2b2622" />
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+function EyeOff() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.9 4.6M6.6 6.6A17.6 17.6 0 0 0 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4-.7" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
     </svg>
   );
 }

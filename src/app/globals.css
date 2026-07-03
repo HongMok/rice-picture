@@ -37,3 +37,120 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ============ 登录页卡通角色（kinetic-auth 复刻） ============ */
+.km-scene {
+  position: relative;
+  width: 340px;
+  height: 340px;
+}
+
+.km-char {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.25));
+}
+.km-tilted {
+  transform: rotate(-5deg);
+  animation: km-shake 0.4s ease-in-out;
+}
+@keyframes km-shake {
+  0%, 100% { transform: rotate(-5deg); }
+  25% { transform: rotate(-8deg); }
+  50% { transform: rotate(-5deg); }
+  75% { transform: rotate(-2deg); }
+}
+
+.km-eyes {
+  display: flex;
+  gap: 14px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* 眼睛 */
+.km-eye {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  background: #fff;
+  border: 3px solid #2b2622;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.km-pupil {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #2b2622;
+  border-radius: 50%;
+}
+.km-eye.closed {
+  height: 6px;
+  background: #2b2622;
+  border: none;
+  border-radius: 4px;
+  align-self: center;
+  margin-top: 12px;
+}
+.km-eye.closed .km-pupil { display: none; }
+.km-eye.surprise { width: 36px; height: 36px; }
+.km-eye.surprise .km-pupil { width: 12px; height: 12px; }
+.km-eye.happy {
+  height: 14px;
+  border-bottom: none;
+  border-radius: 30px 30px 0 0;
+}
+.km-eye.happy .km-pupil { display: none; }
+.km-eye.side .km-pupil { transform: translateX(-7px); }
+
+/* 嘴巴 */
+.km-mouth {
+  width: 20px;
+  height: 8px;
+  background: #2b2622;
+  border-radius: 0 0 20px 20px;
+  transition: all 0.2s;
+  z-index: 20;
+  margin-top: 10px;
+}
+.km-idle { width: 20px; }
+.km-typing { width: 12px; height: 12px; border-radius: 50%; }
+.km-closed { width: 18px; height: 2px; border-radius: 2px; }
+.km-surprise { width: 16px; height: 20px; border-radius: 50%; }
+.km-side {
+  width: 8px; height: 18px; border-radius: 4px;
+  transform: rotateZ(45deg);
+}
+.km-submit {
+  width: 38px; height: 20px; border-radius: 0 0 40px 40px; background: #fff;
+}
+
+/* 形状变体 */
+.km-rectangle {
+  width: 130px; height: 260px; border-radius: 8px;
+  justify-content: flex-start; padding-top: 46px;
+}
+.km-box {
+  width: 88px; height: 170px; border-radius: 8px;
+  justify-content: flex-start; padding-top: 38px;
+}
+.km-box .km-eyes { gap: 10px; }
+.km-semicircle {
+  width: 160px; height: 96px; border-radius: 100px 100px 0 0;
+  justify-content: center; padding-top: 18px;
+}
+.km-cylinder {
+  width: 96px; height: 140px; border-radius: 48px 48px 0 0;
+  justify-content: center; padding-top: 32px;
+}
+
+@media (max-width: 900px) {
+  .km-scene { transform: scale(0.72); }
+}
