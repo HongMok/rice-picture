@@ -18,7 +18,7 @@ import {
 
 interface RecentProject {
   id: number;
-  type: RecentProjectType;
+  type: RecentProjectType | 'chat';
   title: string;
   updated_at: string;
   created_at: string;
@@ -41,6 +41,7 @@ function formatUpdatedAt(iso: string): string {
 
 function projectHref(item: RecentProject): string {
   if (item.type === 'lesson-plan') return `/app/lesson-plan/${item.id}`;
+  if (item.type === 'chat') return `/app/chat?id=${item.id}`;
   return `/app?panel=${item.type}&open=${item.id}`;
 }
 
@@ -131,7 +132,7 @@ export function GlobalSidebar() {
           )}
         </div>
 
-        {/* 工具箱 + AI 对话 + 个案管理 */}
+        {/* 工具箱 + 资源管理 + 个案管理 + 小禾AI */}
         <div className={clsx('flex flex-col gap-1 pt-3', collapsed ? 'px-2' : 'px-3')}>
           <NavEntry
             href="/app/toolbox"
@@ -139,13 +140,6 @@ export function GlobalSidebar() {
             label="工具箱"
             collapsed={collapsed}
             active={pathname === '/app/toolbox'}
-          />
-          <NavEntry
-            href="/app/chat"
-            icon={<ChatIcon width={18} height={18} />}
-            label="AI 对话"
-            collapsed={collapsed}
-            active={pathname === '/app/chat'}
           />
           <NavEntry
             href="/app/library"
@@ -160,6 +154,13 @@ export function GlobalSidebar() {
             label="个案管理"
             collapsed={collapsed}
             active={pathname?.startsWith('/app/cases')}
+          />
+          <NavEntry
+            href="/app/chat"
+            icon={<ChatIcon width={18} height={18} />}
+            label="小禾AI"
+            collapsed={collapsed}
+            active={pathname === '/app/chat'}
           />
         </div>
 
@@ -289,8 +290,9 @@ function HistoryList({
   return (
     <div className="space-y-1">
       {state.items.map((item) => {
-        const tool = toolByKey(item.type);
-        const Icon = tool?.icon;
+        // chat 类型不在 tools 表中，走 ChatIcon
+        const Icon =
+          item.type === 'chat' ? ChatIcon : toolByKey(item.type)?.icon;
         return (
           <Link
             key={`${item.type}:${item.id}`}

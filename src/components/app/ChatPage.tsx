@@ -1,9 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import clsx from 'clsx';
 import { CHAT_MODELS, type ChatModelKey } from '~/libs/chat';
-import { AttachIcon, ChatIcon, CloseIcon, GlobeIcon, SendIcon } from '~/components/ui/icons';
+import { AttachIcon, CloseIcon, GlobeIcon, SendIcon } from '~/components/ui/icons';
+import { BrandmarkGlyph } from '~/components/login/Brandmark';
 
 const MAX_LEN = 2000;
 const MAX_FILES = 5;
@@ -22,6 +24,13 @@ interface Attachment {
   file: File;
 }
 
+const SUGGESTIONS = [
+  '帮我给一个 5 岁自闭症谱系孩子设计"物品命名"的教学步骤',
+  '孩子上课坐不住 15 分钟就走神，我该怎么调整环境？',
+  '想给家长解释什么是"回合式教学（DTT）"，用简单点的话',
+  '把这段行为观察记录改成结构化的 ABC 分析',
+];
+
 let nextId = 0;
 function genId() {
   nextId += 1;
@@ -29,6 +38,10 @@ function genId() {
 }
 
 export function ChatPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const urlSessionId = params.get('id');
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [model, setModel] = useState<ChatModelKey>('qwen-plus');
@@ -36,8 +49,47 @@ export function ChatPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachError, setAttachError] = useState('');
   const [sending, setSending] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState('');
+  const [sessionId, setSessionId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 从 URL 读会话 id，加载历史消息回填
+  useEffect(() => {
+    const idNum = urlSessionId ? Number(urlSessionId) : NaN;
+    if (!Number.isFinite(idNum)) {
+      setSessionId(null);
+      setMessages([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingHistory(true);
+    fetch(`/api/chat-sessions/${idNum}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.session?.messages) {
+          setSessionId(data.session.id);
+          setMessages(
+            (data.session.messages as { role: 'user' | 'assistant'; content: string }[])
+              .map((m) => ({ id: genId(), role: m.role, content: m.content }))
+          );
+        } else {
+          setError(data.error || '加载对话失败');
+        }
+      })
+      .catch(() => setError('加载对话失败'))
+      .finally(() => !cancelled && setLoadingHistory(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [urlSessionId]);
+
+  // 消息更新后滚动到底部
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages]);
 
   const trimmed = input.trim();
   const canSend = trimmed.length > 0 && !sending;
@@ -65,9 +117,8 @@ export function ChatPage() {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }
 
-  async function send() {
-    if (!canSend) return;
-    const text = trimmed;
+  async function sendText(text: string) {
+    if (!text.trim() || sending) return;
     const userMsg: ChatMessage = { id: genId(), role: 'user', content: text };
     const pendingMsg: ChatMessage = { id: genId(), role: 'assistant', content: '', pending: true };
     setMessages((prev) => [...prev, userMsg, pendingMsg]);
@@ -87,7 +138,7 @@ export function ChatPage() {
         res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, model }),
+          body: JSON.stringify({ messages: history, model, sessionId }),
           signal: controller.signal,
         });
       } finally {
@@ -97,8 +148,16 @@ export function ChatPage() {
       if (!res.ok) throw new Error(data.error || '请求失败');
 
       setMessages((prev) =>
-        prev.map((m) => (m.id === pendingMsg.id ? { ...m, content: data.reply, pending: false } : m))
+        prev.map((m) =>
+          m.id === pendingMsg.id ? { ...m, content: data.reply, pending: false } : m
+        )
       );
+
+      // 拿到 sessionId 后写入 URL（首次），后续保持
+      if (data.sessionId && data.sessionId !== sessionId) {
+        setSessionId(data.sessionId);
+        router.replace(`/app/chat?id=${data.sessionId}`, { scroll: false });
+      }
     } catch (err: any) {
       setMessages((prev) => prev.filter((m) => m.id !== pendingMsg.id));
       setInput(text);
@@ -108,6 +167,10 @@ export function ChatPage() {
     }
   }
 
+  function send() {
+    if (canSend) sendText(trimmed);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -115,26 +178,23 @@ export function ChatPage() {
     }
   }
 
+  const empty = messages.length === 0 && !loadingHistory;
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto px-6 py-10 md:px-10">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-10 md:px-10">
         <div className="mx-auto max-w-[720px]">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-sage-mist text-sage-deep">
-                <ChatIcon width={26} height={26} />
-              </span>
-              <p className="mt-5 max-w-[40ch] text-[15px] leading-[2] text-ink-soft">
-                想聊点什么都可以，慢慢说清楚就好。
-              </p>
-            </div>
+          {loadingHistory ? (
+            <div className="flex justify-center py-24 text-sm text-ink-faint">加载对话中…</div>
+          ) : empty ? (
+            <EmptyState onPickSuggestion={(s) => sendText(s)} />
           ) : (
             <div className="space-y-6">
               {messages.map((m) => (
                 <div key={m.id} className={clsx('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
                   <div
                     className={clsx(
-                      'max-w-[80%] rounded-card px-4 py-3 text-[15px] leading-[2]',
+                      'max-w-[80%] whitespace-pre-wrap rounded-card px-4 py-3 text-[15px] leading-[2]',
                       m.role === 'user' ? 'bg-sage-mist text-sage-deep' : 'bg-card text-ink'
                     )}
                   >
@@ -249,6 +309,39 @@ export function ChatPage() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ onPickSuggestion }: { onPickSuggestion: (s: string) => void }) {
+  return (
+    <div className="flex flex-col items-center py-20 text-center">
+      {/* 小禾 印章 Logo */}
+      <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-[14px] border border-clay-deep/25 bg-sage-mist">
+        <BrandmarkGlyph size={40} onDark={false} />
+      </span>
+      <h1 className="font-serif text-[28px] font-medium leading-tight tracking-[0.02em]">
+        <span className="text-clay-deep">小禾</span>
+        <span className="ml-1.5 text-[16px] font-medium tracking-[0.24em] text-ink">AI</span>
+      </h1>
+      <p className="mt-2.5 text-[15px] text-ink-soft">
+        面向特需儿童康复师 · 特教老师的日常助手
+      </p>
+      <p className="mt-1 text-[13px] text-ink-faint">
+        备教案、写观察记录、给家长解释术语，都可以聊
+      </p>
+
+      <div className="mt-9 grid w-full max-w-[520px] grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {SUGGESTIONS.map((s) => (
+          <button
+            key={s}
+            onClick={() => onPickSuggestion(s)}
+            className="rounded-card border border-line bg-card px-4 py-3 text-left text-[13.5px] leading-[1.7] text-ink-soft transition-colors duration-[250ms] ease-out hover:border-clay-deep/40 hover:bg-sage-mist hover:text-ink"
+          >
+            {s}
+          </button>
+        ))}
       </div>
     </div>
   );

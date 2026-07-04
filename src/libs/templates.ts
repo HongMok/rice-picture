@@ -10,6 +10,7 @@ export interface TemplateRow {
   brief: string;
   options: Record<string, any> | null;
   prompt: string | null;
+  system_prompt: string | null;
   cover_url: string | null;
   sort: number;
 }

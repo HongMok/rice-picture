@@ -31,6 +31,7 @@ export async function GET(
       brief: t.brief,
       options: t.options,
       coverUrl: t.cover_url,
+      systemPrompt: t.system_prompt,
     },
     pages: pages.map((p) => ({
       pageIndex: p.page_index,

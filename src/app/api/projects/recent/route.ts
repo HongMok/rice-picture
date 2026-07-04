@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export interface RecentProject {
   id: number;
-  type: 'image' | 'book' | 'game' | 'video' | 'lesson-plan';
+  type: 'image' | 'book' | 'game' | 'video' | 'lesson-plan' | 'chat';
   title: string;
   updated_at: string;
   created_at: string;
@@ -40,6 +40,10 @@ export async function GET() {
       union all
       select id, 'lesson-plan' as type, coalesce(title, '未命名教案') as title, updated_at, created_at
         from lesson_plans
+       where user_id = $1 and deleted_at is null and updated_at >= now() - interval '720 hours'
+      union all
+      select id, 'chat' as type, coalesce(title, '未命名对话') as title, updated_at, created_at
+        from chat_sessions
        where user_id = $1 and deleted_at is null and updated_at >= now() - interval '720 hours'
       order by updated_at desc, created_at desc
       limit 50

@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '~/libs/auth';
 import { chatComplete, ChatTimeoutError, CHAT_MODELS, type ChatMessage, type ChatModelKey } from '~/libs/chat';
+import {
+  createChatSession,
+  updateChatSessionMessages,
+  getChatSession,
+} from '~/libs/chat-sessions';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -12,7 +17,7 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
-  let body: { messages?: ChatMessage[]; model?: ChatModelKey };
+  let body: { messages?: ChatMessage[]; model?: ChatModelKey; sessionId?: number };
   try {
     body = await req.json();
   } catch {
@@ -26,9 +31,9 @@ export async function POST(req: Request) {
 
   const model = body.model && VALID_MODELS.has(body.model) ? body.model : 'qwen-plus';
 
+  let reply: string;
   try {
-    const reply = await chatComplete(messages, model);
-    return NextResponse.json({ reply });
+    reply = await chatComplete(messages, model);
   } catch (err: any) {
     if (err instanceof ChatTimeoutError) {
       return NextResponse.json({ error: '请求超时，请重试' }, { status: 504 });
@@ -38,4 +43,32 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+
+  // 入库：首轮 → 创建 session；后续轮 → 覆盖 messages
+  const fullMessages: ChatMessage[] = [...messages, { role: 'assistant', content: reply }];
+  let sessionId = body.sessionId;
+  try {
+    if (sessionId && Number.isFinite(sessionId)) {
+      // 校验 session 存在且属于本人
+      const existing = await getChatSession({ id: sessionId, userId: user.id });
+      if (existing) {
+        await updateChatSessionMessages({
+          id: sessionId,
+          userId: user.id,
+          messages: fullMessages,
+        });
+      } else {
+        const s = await createChatSession({ userId: user.id, messages: fullMessages });
+        sessionId = s.id;
+      }
+    } else {
+      const s = await createChatSession({ userId: user.id, messages: fullMessages });
+      sessionId = s.id;
+    }
+  } catch (err) {
+    // 入库失败不阻塞用户拿到回复，仅记录到控制台
+    console.warn('[chat] persist session failed', err);
+  }
+
+  return NextResponse.json({ reply, sessionId });
 }

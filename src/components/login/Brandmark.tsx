@@ -17,6 +17,11 @@ const SIZE_MAP: Record<Size, { box: number; icon: number; wordCls: string; aiCls
 
 /** 卡通萌芽：黑描边 + 品牌绿填充 + 土色小堆。
  *  一大叶右上、一小叶左侧，错落有动势；叶柄从主茎斜伸出。 */
+/** 可复用的萌芽 Glyph（供 Brandmark 内部使用，也导出给对话空态等场景独立使用）。 */
+export function BrandmarkGlyph(props: { size: number; onDark?: boolean }) {
+  return <SproutGlyph {...props} />;
+}
+
 function SproutGlyph({ size, onDark = false }: { size: number; onDark?: boolean }) {
   // 卡通配色：绿叶填充 / 深色描边 / 土棕小堆
   const leaf = '#7FA98B'; // clay (明亮绿)
