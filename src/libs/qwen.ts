@@ -53,9 +53,19 @@ function buildMessages(brief: string, opts: StoryOptions) {
     .filter(Boolean)
     .join('\n');
 
+  // 用户 brief 可能是结构化多行（主角：xxx / 起初：xxx / 后来：xxx / 然后：xxx / 最后：xxx），
+  // 也可能是自由文本。此提示告知模型把结构化行按时序还原为分页情节，
+  // 主角行的外貌锚点必须在每一页 scene 中重复出现。
+  const briefHint = /^\s*主角[:：]/m.test(brief)
+    ? '用户的故事想法采用结构化多行格式（主角/起初/后来/然后/最后）。请按时序把每段扩写为对应的一页；主角一栏的外貌与服装描述，必须在每一页的 scene 里原样重复以保持角色一致性。'
+    : '';
+
   return [
     { role: 'system', content: system },
-    { role: 'user', content: `故事想法：${brief}\n\n${constraints}` },
+    {
+      role: 'user',
+      content: `故事想法：\n${brief}\n\n${briefHint ? briefHint + '\n\n' : ''}${constraints}`,
+    },
   ];
 }
 

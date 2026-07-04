@@ -8,7 +8,8 @@ import {
   defaultSkeleton,
   type LessonPlanSkeleton,
 } from '~/data/lesson-plan-types';
-import { AttachIcon, CloseIcon, SparkleIcon } from '~/components/ui/icons';
+import { AttachIcon, ChevronRightIcon, CloseIcon, SparkleIcon } from '~/components/ui/icons';
+import { FieldLabel } from '~/components/ui';
 
 const MAX_CHAT_LEN = 2000;
 const MAX_KNOWLEDGE_LEN = 500;
@@ -60,6 +61,7 @@ export function LessonPlanGenerator() {
   // 状态
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 加载孩子列表
@@ -326,87 +328,123 @@ export function LessonPlanGenerator() {
             </div>
           </Step>
 
-          {/* 4. 阶段 */}
-          <Step index={4} label="阶段" optional>
-            <input
-              value={phaseLabel}
-              onChange={(e) => setPhaseLabel(e.target.value)}
-              placeholder="如：3D&3D 不完全相同物品配对"
-              className="w-full rounded-input border border-line bg-paper px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-sage"
-            />
-          </Step>
-
-          {/* 5. 持有教具 */}
-          <Step index={5} label="手头有的教具" optional>
-            <div className="rounded-input border border-line bg-paper px-3 py-2 focus-within:border-sage">
-              <div className="flex flex-wrap items-center gap-2">
-                {aids.map((a, i) => (
-                  <span
-                    key={i}
-                    className="flex items-center gap-1.5 rounded-full bg-sage-mist px-3 py-0.5 text-xs text-sage-deep"
-                  >
-                    {a}
-                    <button
-                      onClick={() => setAids((prev) => prev.filter((_, idx) => idx !== i))}
-                      aria-label="删除教具"
-                    >
-                      <CloseIcon width={11} height={11} />
-                    </button>
-                  </span>
-                ))}
-                <input
-                  value={aidDraft}
-                  onChange={(e) => setAidDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ',' || e.key === '，') {
-                      e.preventDefault();
-                      commitAidDraft();
-                    } else if (e.key === 'Backspace' && !aidDraft && aids.length > 0) {
-                      setAids((prev) => prev.slice(0, -1));
-                    }
-                  }}
-                  onBlur={commitAidDraft}
-                  placeholder={aids.length === 0 ? '如：积木、卡片、小汽车（回车分隔）' : ''}
-                  className="min-w-[100px] flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-ink-faint"
-                />
-              </div>
-            </div>
-            <p className="mt-1 text-[11px] text-ink-faint">
-              最多 {MAX_AIDS} 项。AI 会尝试用你手头的教具设计玩法。
-            </p>
-          </Step>
-
-          {/* 6. 时长 */}
-          <Step index={6} label="一节课时长" optional>
-            <div className="flex items-center gap-4">
-              <input
-                type="range"
-                min={5}
-                max={120}
-                step={5}
-                value={lessonMinutes}
-                onChange={(e) => setLessonMinutes(Number(e.target.value))}
-                className="flex-1 accent-sage"
-              />
-              <span className="w-16 text-right text-sm font-medium text-ink">
-                {lessonMinutes} 分钟
+          {/* 拓展信息折叠区（默认收起，仿个案表单风格） */}
+          <div className="mt-8 border-t border-line pt-6">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((v) => !v)}
+              className="flex w-full items-center justify-between text-left text-sm font-medium text-ink-soft transition-colors duration-[450ms] hover:text-clay"
+            >
+              <span>
+                更多参数
+                <span className="ml-1.5 text-xs font-normal text-ink-faint">
+                  （阶段 · 教具 · 时长 · 补充说明，选填）
+                </span>
               </span>
-            </div>
-          </Step>
+              <ChevronRightIcon
+                width={14}
+                height={14}
+                className={
+                  'transition-transform duration-[450ms] ' +
+                  (moreOpen ? 'rotate-90' : '')
+                }
+              />
+            </button>
 
-          {/* 7. 补充描述 */}
-          <Step index={7} label="补充说明" optional>
-            <textarea
-              value={chatPrompt}
-              onChange={(e) => setChatPrompt(e.target.value.slice(0, MAX_CHAT_LEN))}
-              rows={3}
-              placeholder="有想补充的背景、孩子偏好或具体要求？在这里说说，AI 会一并参考。"
-              className="w-full resize-none rounded-input border border-line bg-paper px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-sage"
-            />
-            <p className="mt-1 text-right text-[11px] text-ink-faint">
-              {chatPrompt.length} / {MAX_CHAT_LEN}
-            </p>
-          </Step>
+            {moreOpen && (
+              <div className="mt-6 grid gap-6 animate-fade-in">
+                {/* 阶段 */}
+                <div>
+                  <FieldLabel>阶段（选填）</FieldLabel>
+                  <input
+                    value={phaseLabel}
+                    onChange={(e) => setPhaseLabel(e.target.value)}
+                    placeholder="如：3D&3D 不完全相同物品配对"
+                    className="w-full rounded-input border border-line bg-paper px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-sage"
+                  />
+                </div>
+
+                {/* 手头有的教具 */}
+                <div>
+                  <FieldLabel>手头有的教具（选填）</FieldLabel>
+                  <div className="rounded-input border border-line bg-paper px-3 py-2 focus-within:border-sage">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {aids.map((a, i) => (
+                        <span
+                          key={i}
+                          className="flex items-center gap-1.5 rounded-full bg-sage-mist px-3 py-0.5 text-xs text-sage-deep"
+                        >
+                          {a}
+                          <button
+                            onClick={() =>
+                              setAids((prev) => prev.filter((_, idx) => idx !== i))
+                            }
+                            aria-label="删除教具"
+                          >
+                            <CloseIcon width={11} height={11} />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        value={aidDraft}
+                        onChange={(e) => setAidDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ',' || e.key === '，') {
+                            e.preventDefault();
+                            commitAidDraft();
+                          } else if (e.key === 'Backspace' && !aidDraft && aids.length > 0) {
+                            setAids((prev) => prev.slice(0, -1));
+                          }
+                        }}
+                        onBlur={commitAidDraft}
+                        placeholder={
+                          aids.length === 0 ? '如：积木、卡片、小汽车（回车分隔）' : ''
+                        }
+                        className="min-w-[100px] flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-ink-faint"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-1 text-[11px] text-ink-faint">
+                    最多 {MAX_AIDS} 项。AI 会尝试用你手头的教具设计玩法。
+                  </p>
+                </div>
+
+                {/* 时长 */}
+                <div>
+                  <FieldLabel>一节课时长（选填）</FieldLabel>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min={5}
+                      max={120}
+                      step={5}
+                      value={lessonMinutes}
+                      onChange={(e) => setLessonMinutes(Number(e.target.value))}
+                      className="flex-1 accent-sage"
+                    />
+                    <span className="w-16 text-right text-sm font-medium text-ink">
+                      {lessonMinutes} 分钟
+                    </span>
+                  </div>
+                </div>
+
+                {/* 补充说明 */}
+                <div>
+                  <FieldLabel>补充说明（选填）</FieldLabel>
+                  <textarea
+                    value={chatPrompt}
+                    onChange={(e) => setChatPrompt(e.target.value.slice(0, MAX_CHAT_LEN))}
+                    rows={3}
+                    placeholder="有想补充的背景、孩子偏好或具体要求？在这里说说，AI 会一并参考。"
+                    className="w-full resize-none rounded-input border border-line bg-paper px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-sage"
+                  />
+                  <p className="mt-1 text-right text-[11px] text-ink-faint">
+                    {chatPrompt.length} / {MAX_CHAT_LEN}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* 模板 */}
           <div className="mt-12 border-t border-line pt-8">

@@ -20,17 +20,31 @@ export interface TemplateItem {
 
 /**
  * 「做同款」时把模板的结构化字段拼成多行、可编辑的用户 prompt。
- * 每行一个维度；控制在 4~5 行、约 100 字以内，避免撑爆输入框。
+ * - 图卡：主题/分类/画风 + 单行「描述：xxx」
+ * - 绘本：若 brief 本身已按「主角：/起初：/后来：/然后：/最后：」多行结构化，
+ *   直接把 brief 原样铺开（老师能逐段修改），并附「分类/画风/页数」元信息头
  */
 export function formatTemplateBrief(t: TemplateItem): string {
   const lines: string[] = [];
+  // 判定 brief 是不是结构化格式（首行以「主角：」开头）
+  const structured =
+    t.kind === 'book' &&
+    typeof t.brief === 'string' &&
+    /^主角[:：]/.test(t.brief.trimStart());
+
   lines.push(`主题：${t.title}`);
   lines.push(`分类：${topicName(t.topic)}`);
   lines.push(`画风：${styleName(t.styleKey)}`);
   if (t.kind === 'book' && t.options?.pageCount) {
     lines.push(`页数：${t.options.pageCount} 页`);
   }
-  if (t.brief) {
+  if (structured) {
+    lines.push(''); // 元信息与故事之间加空行
+    for (const raw of t.brief.split('\n')) {
+      const line = raw.trim();
+      if (line) lines.push(line);
+    }
+  } else if (t.brief) {
     lines.push(`描述：${t.brief}`);
   }
   return lines.join('\n');
