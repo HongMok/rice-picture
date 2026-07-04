@@ -12,15 +12,64 @@ import {
   type Phase,
   type ShortTermObjective,
 } from '~/data/lesson-plan-types';
-import { PlusIcon, CloseIcon } from '~/components/ui/icons';
+import { PlusIcon, CloseIcon, ChevronLeftIcon } from '~/components/ui/icons';
 import { LessonPlanTOC } from '~/components/app/lesson-plan/LessonPlanTOC';
 import { GoalImage } from '~/components/app/lesson-plan/GoalImage';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const AUTOSAVE_DELAY = 800; // ms
+const GENERATING_POLL_MS = 3000;
 
+/**
+ * 顶层壳组件：
+ * - status = READY  → 挂载完整编辑器（LessonPlanEditor）
+ * - status = GENERATING / FAILED → 挂载占位组件（GeneratingPlaceholder），轮询后自动切到编辑器
+ * 分开的目的：避免占位期挂载编辑器带来的 autosave / IntersectionObserver 副作用。
+ */
 export function LessonPlanPoster({ initialPlan }: { initialPlan: LessonPlan }) {
+  const [plan, setPlan] = useState<LessonPlan>(initialPlan);
+
+  // GENERATING/FAILED 时轮询 GET /api/lesson-plans/[id]，成功切回 READY 后停止
+  useEffect(() => {
+    if (plan.status === 'READY') return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function tick() {
+      try {
+        const res = await fetch(`/api/lesson-plans/${plan.id}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data?.plan) return;
+        setPlan(data.plan);
+        // 若仍在生成中，继续轮询；READY/FAILED 时 useEffect 会重新计算是否需要停
+      } catch {
+        // 网络抖动忽略，下轮再试
+      } finally {
+        if (!cancelled) timer = setTimeout(tick, GENERATING_POLL_MS);
+      }
+    }
+    timer = setTimeout(tick, GENERATING_POLL_MS);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [plan.id, plan.status]);
+
+  if (plan.status !== 'READY') {
+    return (
+      <GeneratingPlaceholder
+        plan={plan}
+        onRetry={(updated) => setPlan(updated)}
+      />
+    );
+  }
+
+  return <LessonPlanEditor initialPlan={plan} />;
+}
+
+function LessonPlanEditor({ initialPlan }: { initialPlan: LessonPlan }) {
   const router = useRouter();
   const [plan, setPlan] = useState<LessonPlan>(initialPlan);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -1173,6 +1222,115 @@ function StatusMenu({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * "AI 正在起草教案" 占位组件：详情页内部的一个页内占位区，不阻塞 UI 其它导航。
+ * 用户可以随时点左侧导航跳走干别的，回来时轮询会自动接续。
+ */
+function GeneratingPlaceholder({
+  plan,
+  onRetry,
+}: {
+  plan: LessonPlan;
+  onRetry: (updated: LessonPlan) => void;
+}) {
+  const router = useRouter();
+  const [retrying, setRetrying] = useState(false);
+  const failed = plan.status === 'FAILED';
+
+  async function handleRetry() {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      // 重试只在服务端已存过 draft 时可行；本 UI 里我们只支持"回到列表重新生成"
+      // 若之后要支持"原地重试"，需前端把生成参数缓存在 localStorage 里
+      const res = await fetch(`/api/lesson-plans/${plan.id}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok && data?.plan) onRetry(data.plan);
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col bg-paper">
+      <div className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-line bg-paper/95 px-6 backdrop-blur">
+        <button
+          onClick={() => router.push('/app/lesson-plan')}
+          className="grid h-9 w-9 place-items-center rounded-input border border-line bg-card text-ink-soft transition-colors hover:bg-paper-deep hover:text-ink"
+          aria-label="返回"
+        >
+          <ChevronLeftIcon width={16} height={16} />
+        </button>
+        <p className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink">
+          {plan.title || '正在生成…'}
+        </p>
+        <span
+          className={clsx(
+            'rounded-full px-2.5 py-0.5 text-[11px] font-medium',
+            failed
+              ? 'bg-[#FBF1F1] text-[#C0524B]'
+              : 'bg-[#FBEFDA] text-[#B47A2B]'
+          )}
+        >
+          {failed ? '生成失败' : 'AI 起草中'}
+        </span>
+      </div>
+
+      <div className="flex flex-1 items-center justify-center px-6">
+        <div className="w-full max-w-md rounded-section border border-line bg-card px-8 py-10 text-center">
+          {failed ? (
+            <>
+              <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#FBF1F1] text-[24px] text-[#C0524B]">
+                !
+              </div>
+              <p className="mt-5 font-serif text-[18px] text-ink">教案生成失败</p>
+              <p className="mt-2 text-[13px] leading-[1.9] text-ink-soft">
+                {plan.generationError || '请回到「生成教案」重新提交参数试试。'}
+              </p>
+              <div className="mt-6 flex justify-center gap-2">
+                <button
+                  onClick={() => router.push('/app/lesson-plan')}
+                  className="rounded-full bg-clay px-5 py-2 text-xs font-medium text-paper transition-colors hover:bg-clay-deep"
+                >
+                  回到生成页
+                </button>
+                <button
+                  onClick={handleRetry}
+                  disabled={retrying}
+                  className="rounded-full border border-line px-5 py-2 text-xs text-ink-soft transition-colors hover:bg-paper-deep disabled:opacity-40"
+                >
+                  刷新状态
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="relative mx-auto h-12 w-12">
+                <span className="absolute inset-0 animate-ping rounded-full bg-sage-mist opacity-70" />
+                <span className="relative grid h-12 w-12 place-items-center rounded-full bg-sage-mist text-[20px] text-sage-deep">
+                  ✦
+                </span>
+              </div>
+              <p className="mt-5 font-serif text-[18px] text-ink">AI 正在起草教案</p>
+              <p className="mt-2 text-[13px] leading-[1.9] text-ink-soft">
+                大约 30 秒完成，你可以先去别的地方，
+                <br />
+                完成后再回来查看，会自动刷新。
+              </p>
+              <button
+                onClick={() => router.push('/app/toolbox')}
+                className="mt-6 rounded-full border border-line px-5 py-2 text-xs text-ink-soft transition-colors hover:bg-paper-deep"
+              >
+                先去别处看看
+              </button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

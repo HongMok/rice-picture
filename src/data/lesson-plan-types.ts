@@ -124,6 +124,8 @@ export interface LessonPlanDuration {
   trialWindowSec?: number;
 }
 
+export type LessonPlanStatus = 'READY' | 'GENERATING' | 'FAILED';
+
 export interface LessonPlan {
   id: number;
   type: string; // 'ABA-DTT'
@@ -136,11 +138,15 @@ export interface LessonPlan {
   goalChecklist: GoalChecklistItem[];
   createdAt: string;
   updatedAt: string;
+  /** 生成状态：GENERATING 时前端只显示占位；READY 才是可编辑教案 */
+  status: LessonPlanStatus;
+  /** 生成失败时的错误信息，供前端"重试"入口显示 */
+  generationError: string | null;
 }
 
 export type LessonPlanSkeleton = Omit<
   LessonPlan,
-  'id' | 'createdAt' | 'updatedAt' | 'source'
+  'id' | 'createdAt' | 'updatedAt' | 'source' | 'status' | 'generationError'
 >;
 
 let idSeq = 0;

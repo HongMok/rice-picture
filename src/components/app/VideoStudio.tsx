@@ -64,6 +64,9 @@ export function VideoStudio() {
   const [childFilter, setChildFilter] = useState<ChildFilter>(null);
   // 上传进度 0~100；null 表示当前不在上传（已上传完或未开始）
   const [uploadPct, setUploadPct] = useState<number | null>(null);
+  // 刚提交但记录还没在 /api/videos 列表里冒出来时的时间戳；用于跨视图持续轮询列表，
+  // 保证即使用户上传阶段就点"返回列表"，记录一旦落库也能立刻出现在列表里。
+  const [pendingSubmitAt, setPendingSubmitAt] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimer = () => timer.current && clearTimeout(timer.current);
@@ -153,6 +156,34 @@ export function VideoStudio() {
     // FAILED 就留在 list 视图；用户能在列表看到失败标记
   }, [loading, history, poll]);
 
+  /* ---------- 提交后跨视图轮询：刚提交的记录（上传中/POST 未回）无论用户在哪个 view，
+              一旦记录落库就立刻拉进 history，让列表能看到；60s 超时兜底防泄漏。---------- */
+  useEffect(() => {
+    if (pendingSubmitAt == null) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      await load();
+    };
+    const t = setInterval(tick, 2500);
+    tick();
+    const timeout = setTimeout(() => setPendingSubmitAt(null), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+      clearTimeout(timeout);
+    };
+  }, [pendingSubmitAt, load]);
+
+  /* ---------- 一旦 history 里出现"提交时间之后创建的记录"，就把 pending 标记清掉 ---------- */
+  useEffect(() => {
+    if (pendingSubmitAt == null) return;
+    const hit = history.some(
+      (a) => a.createdAt && new Date(a.createdAt).getTime() >= pendingSubmitAt - 5000
+    );
+    if (hit) setPendingSubmitAt(null);
+  }, [history, pendingSubmitAt]);
+
   /* ---------- 后台轻量轮询：不打开分析视图也能自动刷新列表里 ANALYZING 记录的状态 ---------- */
   const bgTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
@@ -215,10 +246,12 @@ export function VideoStudio() {
             (a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
           )[0];
         if (done) {
+          setPendingSubmitAt(null);
           setView({ kind: 'report', analysis: done });
           return;
         }
         if (match) {
+          setPendingSubmitAt(null);
           setView({ kind: 'analyzing', id: match.id, startedAt });
           poll(match.id);
         }
@@ -244,6 +277,7 @@ export function VideoStudio() {
     // 找到刚建的 ANALYZING 记录，再切到 id 轮询。
     const startedAt = Date.now();
     setUploadPct(0);
+    setPendingSubmitAt(startedAt); // 跨视图刷新列表用；一旦记录出现就在效果里清掉
     setView({ kind: 'analyzing', id: -1, startedAt });
 
     let videoUrl: string;
@@ -251,6 +285,7 @@ export function VideoStudio() {
       videoUrl = await uploadVideoToOss(payload.file, (pct) => setUploadPct(pct));
     } catch (err: any) {
       setUploadPct(null);
+      setPendingSubmitAt(null);
       setView({ kind: 'compose' });
       alert(err?.message || '上传失败，请重试');
       return;
@@ -268,8 +303,9 @@ export function VideoStudio() {
           try {
             const data = await res.json();
             if (!data?.id) {
-              // 前置校验失败，没有建记录：退回 compose
+              // 前置校验失败，没有建记录：退回 compose，清掉 pending 标记
               setUploadPct(null);
+              setPendingSubmitAt(null);
               setView({ kind: 'compose' });
               alert(data?.error || '提交失败，请重试');
               return;
@@ -2126,18 +2162,36 @@ function InsightPanel({ analysisId, scope }: { analysisId: number; scope: 'child
           )}
 
           {followups.length > 0 && (
-            <div className="mb-2.5 flex flex-wrap gap-2">
-              {followups.map((f, i) => (
-                <button
-                  key={i}
-                  disabled={asking}
-                  onClick={() => ask(f)}
-                  className="rounded-full border border-clay/40 bg-white px-3 py-1.5 text-xs text-clay transition-colors hover:bg-clay-mist disabled:opacity-40"
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            messages.length === 0 ? (
+              // 首屏预设短问题：气泡样式
+              <div className="mb-2.5 flex flex-wrap gap-2">
+                {followups.map((f, i) => (
+                  <button
+                    key={i}
+                    disabled={asking}
+                    onClick={() => ask(f)}
+                    className="rounded-full border border-clay/40 bg-white px-3 py-1.5 text-xs text-clay transition-colors hover:bg-clay-mist disabled:opacity-40"
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              // 追问引导可能较长：改左对齐单行链接，行末带箭头
+              <div className="mb-2.5 flex flex-col gap-1.5">
+                {followups.map((f, i) => (
+                  <button
+                    key={i}
+                    disabled={asking}
+                    onClick={() => ask(f)}
+                    className="group flex items-start gap-2 text-left text-xs leading-relaxed text-clay transition-colors hover:text-clay-deep disabled:opacity-40"
+                  >
+                    <span className="flex-1">{f}</span>
+                    <span className="shrink-0 transition-transform group-hover:translate-x-0.5">→</span>
+                  </button>
+                ))}
+              </div>
+            )
           )}
 
           <div className="flex gap-2">

@@ -456,3 +456,9 @@ alter table training_questions add column if not exists knowledge_item_codes jso
 
 -- 题目可以脱离课程，直接挂在知识点条目上（放宽 not null）
 alter table training_questions alter column related_course_id drop not null;
+
+-- ============ 教案异步生成状态 ============
+-- 生成流改为“先落空壳 → 后台异步 → 前端轮询”，避免整页阻塞弹窗
+-- READY = 编辑就绪；GENERATING = AI 起草中；FAILED = 生成失败，可重试
+alter table lesson_plans add column if not exists status varchar default 'READY';
+alter table lesson_plans add column if not exists generation_error text;

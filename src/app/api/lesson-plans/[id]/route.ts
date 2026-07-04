@@ -45,7 +45,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const id = parseId(params.id);
   if (!id) return NextResponse.json({ error: '无效的教案 ID' }, { status: 400 });
 
-  let body: Omit<LessonPlan, 'id' | 'createdAt' | 'updatedAt'>;
+  let body: Omit<LessonPlan, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'generationError'>;
   try {
     body = await req.json();
   } catch {

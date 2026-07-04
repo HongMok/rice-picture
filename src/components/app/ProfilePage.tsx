@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { CurrentUser } from '~/libs/auth';
 import { Button, Input } from '~/components/ui';
+import { useConfirm } from '~/components/ui/dialog';
 import { ChevronLeftIcon, LogoutIcon } from '~/components/ui/icons';
 
 type Status =
@@ -15,6 +16,7 @@ type Status =
 
 export function ProfilePage({ initialUser }: { initialUser: CurrentUser }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [user, setUser] = useState(initialUser);
   const [nickname, setNickname] = useState(initialUser.nickname || '');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -88,6 +90,14 @@ export function ProfilePage({ initialUser }: { initialUser: CurrentUser }) {
 
   async function handleLogout() {
     if (loggingOut) return;
+    const ok = await confirm({
+      title: '退出登录',
+      text: '确定要退出当前账号吗？未保存的修改会丢失。',
+      confirmLabel: '退出登录',
+      cancelLabel: '取消',
+      danger: true,
+    });
+    if (!ok) return;
     setLoggingOut(true);
     try {
       await fetch('/api/auth/logout', { method: 'POST' });

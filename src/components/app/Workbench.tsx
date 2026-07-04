@@ -290,6 +290,21 @@ export function Workbench({
         briefText.split('\n')[0].replace(/^主题：/, '').slice(0, 30) ||
         briefText.slice(0, 30) ||
         '新绘本';
+      // 绘本的 POST 会同步写文 + 提交首批生图任务，通常 15~30 秒才返回。
+      // 先用一个负数临时 id 塞占位卡（sessionCards 就能立刻看到"绘本创作中…"），
+      // 拿到真 bookId 后再原地替换。
+      const tempId = -Date.now();
+      setItems((cur) => [
+        {
+          id: tempId,
+          kind: 'book' as const,
+          title: optimisticTitle,
+          status: 'ILLUSTRATING',
+          coverUrl: null,
+        },
+        ...cur,
+      ]);
+      trackSession('book', tempId);
       try {
         const res = await fetch('/api/book', {
           method: 'POST',
@@ -304,28 +319,51 @@ export function Workbench({
         });
         const data = await res.json();
         if (!res.ok) {
+          // 失败：把临时占位撤掉
+          setItems((cur) => cur.filter((x) => !(x.kind === 'book' && x.id === tempId)));
+          setSessionIds((s) => {
+            const n = new Set(s);
+            n.delete(`book:${tempId}`);
+            return n;
+          });
           alert(data.error || '生成失败');
           return;
         }
-        setItems((cur) => [
-          {
-            id: data.bookId,
-            kind: 'book' as const,
-            title: data.title || optimisticTitle,
-            status: 'ILLUSTRATING',
-            coverUrl: null,
-          },
-          ...cur.filter((x) => !(x.kind === 'book' && x.id === data.bookId)),
-        ]);
+        // 把占位替换成真数据
+        setItems((cur) => {
+          const withoutTemp = cur.filter((x) => !(x.kind === 'book' && x.id === tempId));
+          return [
+            {
+              id: data.bookId,
+              kind: 'book' as const,
+              title: data.title || optimisticTitle,
+              status: 'ILLUSTRATING',
+              coverUrl: null,
+            },
+            ...withoutTemp.filter((x) => !(x.kind === 'book' && x.id === data.bookId)),
+          ];
+        });
+        setSessionIds((s) => {
+          const n = new Set(s);
+          n.delete(`book:${tempId}`);
+          n.add(`book:${data.bookId}`);
+          return n;
+        });
         dispatchHistoryAdd({
           id: data.bookId,
           type: 'book',
           title: data.title || optimisticTitle || '未命名绘本',
         });
         dispatchHistoryRefresh();
-        trackSession('book', data.bookId);
         pollBook(data.bookId);
       } catch {
+        // 网络错误：撤占位
+        setItems((cur) => cur.filter((x) => !(x.kind === 'book' && x.id === tempId)));
+        setSessionIds((s) => {
+          const n = new Set(s);
+          n.delete(`book:${tempId}`);
+          return n;
+        });
         alert('网络错误');
       } finally {
         setGenerating(false);

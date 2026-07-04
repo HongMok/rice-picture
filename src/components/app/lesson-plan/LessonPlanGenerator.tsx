@@ -125,14 +125,31 @@ export function LessonPlanGenerator() {
     // 把孩子背景 + 用户描述合并成最终 chatPrompt
     const child = children.find((c) => c.id === childId);
     const childHint = child
-      ? `【孩子背景】${child.nickname}${child.age ? `，${child.age} 岁` : ''}。`
+      ? `【孩子背景】${child.nickname}${child.age ? `,${child.age} 岁` : ''}。`
       : '';
     const finalChat = [childHint, chatPrompt.trim()].filter(Boolean).join('\n');
 
+    const draftTitle = `${skillResolved}·${
+      source === 'knowledge' ? knowledgePoint.slice(0, 20) : '教材附件'
+    }`;
+
     try {
-      const res = await fetch('/api/lesson-plans/generate', {
+      // 1) 先落空壳（毫秒级），拿 id 立即跳转 —— 避免整页阻塞弹窗
+      const draftRes = await fetch('/api/lesson-plans/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: draftTitle }),
+      });
+      const draftData = await draftRes.json();
+      if (!draftRes.ok) throw new Error(draftData.error || '创建失败');
+      const planId = draftData.plan?.id;
+      if (!planId) throw new Error('创建失败：缺少教案 id');
+
+      // 2) fire-and-forget 触发后台生成。不 await——即使用户跳走，请求也会跑到完成。
+      fetch(`/api/lesson-plans/${planId}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
         body: JSON.stringify({
           chatPrompt: finalChat,
           knowledgePoint: source === 'knowledge' ? knowledgePoint : '',
@@ -142,19 +159,12 @@ export function LessonPlanGenerator() {
           ownedAids: aids,
           lessonMinutes,
         }),
+      }).catch(() => {
+        // 忽略网络错误——详情页会通过轮询看到 FAILED 状态并允许重试
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '生成失败');
 
-      const createRes = await fetch('/api/lesson-plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skeleton: data.skeleton, source: data.source }),
-      });
-      const createData = await createRes.json();
-      if (!createRes.ok) throw new Error(createData.error || '保存失败');
-
-      router.push(`/app/lesson-plan/${createData.plan.id}`);
+      // 3) 立即跳转到详情页占位（占位态由 LessonPlanPoster 处理）
+      router.push(`/app/lesson-plan/${planId}`);
     } catch (err: any) {
       setError(err?.message || '生成失败，请重试');
       setGenerating(false);
@@ -434,23 +444,11 @@ export function LessonPlanGenerator() {
             className="flex shrink-0 items-center justify-center gap-2 rounded-full bg-sage px-6 py-3 text-sm font-medium text-paper transition-colors hover:bg-sage-deep disabled:cursor-not-allowed disabled:opacity-40"
           >
             <SparkleIcon width={16} height={16} />
-            {generating ? '起草中…' : '生成教案初稿'}
+            {generating ? '正在跳转…' : '生成教案初稿'}
           </button>
         </div>
       </div>
 
-      {/* 生成中蒙层 */}
-      {generating && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-paper/70 backdrop-blur-sm">
-          <div className="rounded-section bg-card px-10 py-8 text-center shadow-xl">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-sage border-t-transparent" />
-            <p className="mt-4 font-serif text-[17px] text-ink">AI 正在起草教案</p>
-            <p className="mt-1 text-xs text-ink-faint">
-              大约 30 秒完成，请稍候…
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
