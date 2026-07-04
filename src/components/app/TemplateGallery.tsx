@@ -55,7 +55,7 @@ export function TemplateGallery({
   // 按当前模式（图片/绘本）拉取对应模板
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/templates?kind=${kind}`)
+    fetch(`/api/templates?kind=${kind}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => setAll(d.templates || []))
       .catch(() => setAll([]))
@@ -72,19 +72,14 @@ export function TemplateGallery({
 
   return (
     <div className="mx-auto mt-8 w-full max-w-5xl rounded-section border border-line bg-white/60 p-4">
-      {/* 标题 + 类型 / 风格 tab */}
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm font-medium text-ink">
-          {kind === 'book' ? '绘本模板' : '图片模板'}
-        </p>
-        <div className="flex items-center gap-5">
-          <SegTab active={tab === 'type'} onClick={() => setTab('type')}>
-            类型
-          </SegTab>
-          <SegTab active={tab === 'style'} onClick={() => setTab('style')}>
-            风格
-          </SegTab>
-        </div>
+      {/* 类型 / 风格 tab（左对齐） */}
+      <div className="mb-3 flex items-center gap-5">
+        <SegTab active={tab === 'type'} onClick={() => setTab('type')}>
+          类型
+        </SegTab>
+        <SegTab active={tab === 'style'} onClick={() => setTab('style')}>
+          风格
+        </SegTab>
       </div>
 
       {/* 二级 chips */}

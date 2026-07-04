@@ -22,6 +22,7 @@ import {
   ChevronLeftIcon,
   ImageIcon,
   SparkleIcon,
+  CloseIcon,
 } from '~/components/ui/icons';
 import { toolByKey } from '~/data/tools';
 import { DEFAULT_RATIO, DEFAULT_PAGE_COUNT } from '~/data/taxonomy';
@@ -78,6 +79,9 @@ export function Workbench({
   const [readerTitle, setReaderTitle] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  // 图卡大图查看器（DashScope URL 带 Content-Disposition: attachment，直接 window.open 会触发下载，
+  // 因此走应用内 lightbox）
+  const [lightbox, setLightbox] = useState<{ url: string; title: string } | null>(null);
   // 本次会话在这个 Workbench 里点过「生成」的作品 id 集合。主区的进度/结果卡片只渲染这些，
   // 避免历史堆到主区里；左栏仍显示全部作品。
   const [sessionIds, setSessionIds] = useState<Set<string>>(() => new Set());
@@ -95,6 +99,12 @@ export function Workbench({
       setPdfBusy(false);
     }
   }
+
+  // 主区滚动容器（内部 <main>，非 window）：pickTemplate 等要滚回顶部时用
+  const mainRef = useRef<HTMLElement | null>(null);
+  const scrollMainToTop = () => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // 多任务并行：每个正在轮询的 task/book 各持有自己的 timeout；key = `image:${taskId}` | `book:${bookId}`
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -380,7 +390,7 @@ export function Workbench({
       pageCount: t.options?.pageCount || DEFAULT_PAGE_COUNT,
       templateId: t.id,
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollMainToTop();
   }
 
   /**
@@ -434,7 +444,7 @@ export function Workbench({
       } catch {
         /* 忽略 */
       }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollMainToTop();
       return;
     }
 
@@ -482,7 +492,7 @@ export function Workbench({
     } catch {
       /* 忽略 */
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollMainToTop();
   }
 
   /* ---------- 通过 URL ?open=<id> 自动打开一次 ---------- */
@@ -515,7 +525,7 @@ export function Workbench({
         <PanelHeader tool={tool} />
 
 
-        <main className="flex-1 overflow-y-auto px-6 py-8 md:px-10">
+        <main ref={mainRef} className="flex-1 overflow-y-auto px-6 py-8 md:px-10">
           {panel === 'game' ? (
             <GameStudio />
           ) : panel === 'video' ? (
@@ -538,6 +548,11 @@ export function Workbench({
               mode={composer.mode}
               onOpen={openItem}
               onRetry={retryItem}
+              onOpenImage={(it) => {
+                if (it.coverUrl) {
+                  setLightbox({ url: it.coverUrl, title: it.title || '图片' });
+                }
+              }}
               onReadBook={async (it) => {
                 // 先确保本地 pages 是这本的（可能已经在 openItem 里拉过；这里再拉一次以防用户直接从大列表点）
                 try {
@@ -637,6 +652,51 @@ export function Workbench({
           pdfBusy={pdfBusy}
         />
       )}
+
+      {/* 图卡大图 Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 backdrop-blur-sm"
+          onClick={() => setLightbox(null)}
+        >
+          <div
+            className="relative flex max-h-full max-w-4xl flex-col overflow-hidden rounded-section bg-paper p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="truncate pr-4 text-sm font-medium text-ink-soft">
+                {lightbox.title}
+              </p>
+              <div className="flex shrink-0 items-center gap-1">
+                <a
+                  href={lightbox.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:bg-clay-mist hover:text-ink"
+                  title="下载图片"
+                >
+                  <DownloadIcon width={14} height={14} />
+                  下载
+                </a>
+                <button
+                  onClick={() => setLightbox(null)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-ink-faint transition-colors hover:bg-clay-mist hover:text-ink"
+                  aria-label="关闭"
+                >
+                  <CloseIcon width={18} height={18} />
+                </button>
+              </div>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightbox.url}
+              alt={lightbox.title}
+              className="max-h-[80vh] rounded-card border border-line object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
     </PanelBackProvider>
   );
@@ -653,6 +713,7 @@ function SessionCards({
   onOpen,
   onRetry,
   onReadBook,
+  onOpenImage,
 }: {
   items: LibItem[];
   sessionIds: Set<string>;
@@ -660,6 +721,7 @@ function SessionCards({
   onOpen: (it: LibItem) => void;
   onRetry: (it: LibItem) => void;
   onReadBook: (it: LibItem) => void;
+  onOpenImage: (it: LibItem) => void;
 }) {
   const list = items.filter(
     (it) => it.kind === mode && sessionIds.has(`${it.kind}:${it.id}`)
@@ -679,7 +741,7 @@ function SessionCards({
           const done = !pending && !failed && !!it.coverUrl;
           const openViewer = () => {
             if (it.kind === 'book') onReadBook(it);
-            else if (it.coverUrl) window.open(it.coverUrl, '_blank', 'noopener');
+            else onOpenImage(it);
           };
           return (
             <div

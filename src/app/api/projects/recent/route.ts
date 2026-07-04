@@ -44,7 +44,7 @@ export async function GET() {
       type: 'game',
       sql: `select id, updated_at, created_at, coalesce(title, $2) as title
               from games
-             where user_id = $1
+             where user_id = $1 and deleted_at is null
                and updated_at >= now() - interval '720 hours'`,
       fallback: '未命名游戏',
     },
@@ -52,7 +52,7 @@ export async function GET() {
       type: 'video',
       sql: `select id, updated_at, created_at, coalesce(title, $2) as title
               from video_analyses
-             where user_id = $1
+             where user_id = $1 and deleted_at is null
                and updated_at >= now() - interval '720 hours'`,
       fallback: '未命名视频分析',
     },

@@ -38,7 +38,7 @@ const POPULAR_CHARACTERS = [
 export function GameStudio() {
   const [children, setChildren] = useState<Child[]>([]);
   const [childId, setChildId] = useState<number | null>(null);
-  /** 演示角色覆写：优先于个案的 interests[0]。空串 = 用个案兴趣兜底。 */
+  /** 偏好物覆写：优先于个案的 interests[0]。空串 = 用个案兴趣兜底。 */
   const [characterOverride, setCharacterOverride] = useState('');
   const [view, setView] = useState<View>({ kind: 'list' });
   const [loading, setLoading] = useState(true);
@@ -192,22 +192,18 @@ export function GameStudio() {
             onCharacterChange={setCharacterOverride}
           />
           <GameTypeGroup
-            title="认知训练"
+            title="游戏列表"
             types={(Object.keys(GAME_META) as GameType[]).filter((gt) => GAME_ENGINE[gt] === 'quiz')}
             onPick={startGame}
           />
-          <GameTypeGroup
-            title="反应训练"
-            types={(Object.keys(GAME_META) as GameType[]).filter((gt) => GAME_ENGINE[gt] === 'reflex')}
-            onPick={startGame}
-          />
+          {/* 反应训练（捉蝴蝶 / 打地鼠）暂时隐藏，未上线 */}
         </>
       )}
     </div>
   );
 }
 
-/* ---------------- 顶部个案筛选 + 演示角色 ---------------- */
+/* ---------------- 顶部个案筛选 + 偏好物 ---------------- */
 function ChildFilter({
   children,
   value,
@@ -267,10 +263,10 @@ function ChildFilter({
         )}
       </div>
 
-      {/* 第二段：演示角色（情绪题会用它出图） */}
+      {/* 第二段：偏好物（情绪题会用它出图） */}
       <div className="border-t border-line pt-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-ink-faint">演示角色（情绪题）</p>
+          <p className="text-xs font-medium text-ink-faint">偏好物（用于出题上下文）</p>
           {characterOverride && (
             <button
               onClick={() => onCharacterChange('')}
@@ -313,9 +309,9 @@ function ChildFilter({
         <div className="mt-3 flex items-center gap-2 rounded-input bg-clay-mist px-3 py-2 text-xs text-clay-deep">
           <span className="text-base">🎭</span>
           <span>
-            本局情绪题的表情将使用{' '}
-            <span className="font-medium">{effectiveCharacter || '通用小朋友'}</span>{' '}
-            形象展示
+            本局题目将围绕{' '}
+            <span className="font-medium">{effectiveCharacter || '通用卡通角色'}</span>{' '}
+            展开（心情/配对都会用到）
           </span>
         </div>
       </div>

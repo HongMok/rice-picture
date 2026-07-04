@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '~/libs/auth';
-import { chatComplete, ChatTimeoutError, CHAT_MODELS, type ChatMessage, type ChatModelKey } from '~/libs/chat';
+import {
+  chatComplete,
+  ChatTimeoutError,
+  CHAT_MODELS,
+  type ChatMessage,
+  type ChatModelKey,
+  type ChatChildContext,
+} from '~/libs/chat';
 import {
   createChatSession,
   updateChatSessionMessages,
   getChatSession,
   softDeleteChatSession,
 } from '~/libs/chat-sessions';
+import { getChild } from '~/libs/children';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -18,7 +26,12 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
-  let body: { messages?: ChatMessage[]; model?: ChatModelKey; sessionId?: number };
+  let body: {
+    messages?: ChatMessage[];
+    model?: ChatModelKey;
+    sessionId?: number;
+    childId?: number | null;
+  };
   try {
     body = await req.json();
   } catch {
@@ -32,38 +45,72 @@ export async function POST(req: Request) {
 
   const model = body.model && VALID_MODELS.has(body.model) ? body.model : 'qwen-plus';
 
-  // === 先入库（用户发出时就落一条 session）===
-  // 首轮：创建 session，只带当前 user messages（无 assistant reply）
-  // 后续：先把新用户消息写进已有 session
-  // 这样侧栏在 AI 还没回复时就能看到条目。
+  // === 先入库（用户发出时就落一条 session） ===
+  // 首轮：创建 session，childId 会被锁定进 chat_sessions.child_id
+  // 后续：从已有 session 读回 child_id（不再采用前端传过来的 childId，会话锁定后就不可改）
   let sessionId = body.sessionId;
   let createdThisTurn = false;
+  let resolvedChildId: number | null = null;
   try {
     if (sessionId && Number.isFinite(sessionId)) {
       const existing = await getChatSession({ id: sessionId, userId: user.id });
       if (existing) {
+        resolvedChildId = existing.child_id ?? null;
         await updateChatSessionMessages({ id: sessionId, userId: user.id, messages });
       } else {
-        const s = await createChatSession({ userId: user.id, messages });
+        // 前端传的 sessionId 不存在（用户被清库或跨设备）：当作新会话，接受本次 childId
+        resolvedChildId = body.childId ?? null;
+        const s = await createChatSession({
+          userId: user.id,
+          messages,
+          childId: resolvedChildId,
+        });
         sessionId = s.id;
         createdThisTurn = true;
       }
     } else {
-      const s = await createChatSession({ userId: user.id, messages });
+      resolvedChildId = body.childId ?? null;
+      const s = await createChatSession({
+        userId: user.id,
+        messages,
+        childId: resolvedChildId,
+      });
       sessionId = s.id;
       createdThisTurn = true;
     }
   } catch (err) {
     console.warn('[chat] pre-persist session failed', err);
     sessionId = undefined;
+    resolvedChildId = body.childId ?? null; // 入库失败时也尽量把本轮 child 上下文传给 AI
+  }
+
+  // === 拉个案上下文（如有） ===
+  let childCtx: ChatChildContext | null = null;
+  if (resolvedChildId) {
+    try {
+      const child = await getChild(resolvedChildId, user.id);
+      if (child) {
+        childCtx = {
+          nickname: child.nickname,
+          age: child.age,
+          gender: child.gender,
+          diagnosis: child.diagnosis,
+          severity: child.severity,
+          strengths: child.strengths,
+          weaknesses: child.weaknesses,
+          interests: child.interests,
+        };
+      }
+    } catch (err) {
+      console.warn('[chat] load child ctx failed', err);
+    }
   }
 
   // === 调用 AI ===
   let reply: string;
   try {
-    reply = await chatComplete(messages, model);
+    reply = await chatComplete(messages, model, childCtx);
   } catch (err: any) {
-    // AI 调用失败：如果本轮刚创建的空对话，回滚软删；已有对话保留（user 消息值得留下）
     if (createdThisTurn && sessionId) {
       try {
         await softDeleteChatSession({ id: sessionId, userId: user.id });
@@ -88,5 +135,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ reply, sessionId });
+  return NextResponse.json({ reply, sessionId, childId: resolvedChildId });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '~/libs/auth';
 import { createImageTask, queryImageTask } from '~/libs/dashscope';
+import { hasBlobToken, persistImage } from '~/libs/blob';
 import {
   getLessonPlan,
   lessonPlanOwnerId,
@@ -89,9 +90,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: '生成超时，请稍后重试' }, { status: 504 });
   }
 
+  // 存永久 Blob 以避免 dashscope URL 24h 过期
+  let finalUrl = imageUrl;
+  if (hasBlobToken()) {
+    try {
+      finalUrl = await persistImage(imageUrl, `lesson-plan-goal-${itemId}`);
+    } catch (err: any) {
+      console.warn('[goal-item-image] persistImage failed:', err?.message);
+    }
+  }
+
   // 写回 goalChecklist
   const nextChecklist = plan.goalChecklist.map((g) =>
-    g.id === itemId ? { ...g, imageUrl } : g
+    g.id === itemId ? { ...g, imageUrl: finalUrl } : g
   );
 
   try {
@@ -112,5 +123,5 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     );
   }
 
-  return NextResponse.json({ imageUrl });
+  return NextResponse.json({ imageUrl: finalUrl });
 }

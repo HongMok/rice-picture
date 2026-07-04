@@ -3,19 +3,25 @@
 import clsx from 'clsx';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUser } from '~/context/user-context';
 import { toolByKey, type RecentProjectType } from '~/data/tools';
 import {
   ChatIcon,
   ClockIcon,
+  CloseIcon,
+  EditIcon,
+  GraduationIcon,
   MenuIcon,
+  MoreHorizontalIcon,
   SettingsIcon,
   SidebarToggleIcon,
   ToolboxIcon,
+  TrashIcon,
   UsersIcon,
   WorksIcon,
 } from '~/components/ui/icons';
+import { BrandmarkGlyph } from '~/components/login/Brandmark';
 
 interface RecentProject {
   id: number;
@@ -180,6 +186,13 @@ export function GlobalSidebar() {
             active={pathname?.startsWith('/app/cases')}
           />
           <NavEntry
+            href="/app/training"
+            icon={<GraduationIcon width={18} height={18} />}
+            label="培训测评"
+            collapsed={collapsed}
+            active={pathname?.startsWith('/app/training')}
+          />
+          <NavEntry
             href="/app/chat"
             icon={<ChatIcon width={18} height={18} />}
             label="小禾AI"
@@ -321,54 +334,255 @@ function HistoryList({
 
   return (
     <div className="space-y-1">
-      {state.items.map((item) => {
-        // chat 类型不在 tools 表中，走 ChatIcon
-        const Icon =
-          item.type === 'chat' ? ChatIcon : toolByKey(item.type)?.icon;
-        return (
-          <Link
-            key={`${item.type}:${item.id}`}
-            href={projectHref(item)}
-            onClick={onOpen}
-            title={item.title}
-            className={clsx(
-              'flex items-center gap-2 rounded-card px-2 py-2 text-left transition-colors duration-[250ms] ease-out hover:bg-paper-deep',
-              collapsed && 'justify-center'
-            )}
-          >
-            {Icon && <Icon width={16} height={16} className="shrink-0 text-ink-soft" />}
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] text-ink">{item.title}</p>
-                <p className="text-[12px] text-ink-faint">{formatUpdatedAt(item.updated_at)}</p>
-              </div>
-            )}
-          </Link>
-        );
-      })}
+      {state.items.map((item) => (
+        <HistoryItem
+          key={`${item.type}:${item.id}`}
+          item={item}
+          collapsed={collapsed}
+          onOpen={onOpen}
+        />
+      ))}
     </div>
   );
 }
 
-/* 小禾印章 Logo：柔角方形 + 卡通萌芽（黑边+绿叶+土堆，一大一小对生）*/
+/**
+ * 单条历史项：hover 时右侧显示 `⋯` 菜单触发器，弹浮层菜单。
+ * 操作集：重命名（内联输入）/ 删除（二次确认）—— 对齐 ChatGPT / Claude / Gemini 的最小基线。
+ * 5 类资源统一走 endpoint pattern：/api/{type}/${id}（chat 走 chat-sessions）。
+ */
+function HistoryItem({
+  item,
+  collapsed,
+  onOpen,
+}: {
+  item: RecentProject;
+  collapsed: boolean;
+  onOpen: () => void;
+}) {
+  const Icon = item.type === 'chat' ? ChatIcon : toolByKey(item.type)?.icon;
+  const [menuOpen, setMenuOpen] = useState(false);
+  // 'idle' → 'renaming'（内联输入）/ 'confirming'（内联"确认删除"按钮）
+  const [mode, setMode] = useState<'idle' | 'renaming' | 'confirming'>('idle');
+  const [editTitle, setEditTitle] = useState(item.title);
+  const [busy, setBusy] = useState(false);
+  const [displayTitle, setDisplayTitle] = useState(item.title);
+  const [removed, setRemoved] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // 外部 item.title 变化时同步（乐观刷新后 hydrate 到真数据）
+  useEffect(() => {
+    setDisplayTitle(item.title);
+    setEditTitle(item.title);
+  }, [item.title]);
+
+  // 点外部关闭菜单
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuOpen]);
+
+  // 5 类资源的 rename / delete endpoint
+  function endpoint(): string {
+    if (item.type === 'chat') return `/api/chat-sessions/${item.id}`;
+    if (item.type === 'book') return `/api/books/${item.id}`;
+    if (item.type === 'image') return `/api/works/${item.id}`;
+    if (item.type === 'game') return `/api/games/${item.id}`;
+    if (item.type === 'video') return `/api/videos/${item.id}`;
+    if (item.type === 'lesson-plan') return `/api/lesson-plans/${item.id}`;
+    return '';
+  }
+
+  async function doRename() {
+    const t = editTitle.trim();
+    if (!t || t === displayTitle) {
+      setMode('idle');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(endpoint(), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: t }),
+      });
+      if (res.ok) {
+        setDisplayTitle(t);
+        setMode('idle');
+      } else {
+        // 简单回滚
+        setEditTitle(displayTitle);
+      }
+    } catch {
+      setEditTitle(displayTitle);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doDelete() {
+    setBusy(true);
+    try {
+      const res = await fetch(endpoint(), { method: 'DELETE' });
+      if (res.ok) {
+        setRemoved(true);
+        // 通知侧栏刷新（保险：其它 tab 打开时也同步）
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('xiaohe:history-refresh'));
+        }
+      } else {
+        setMode('idle');
+      }
+    } catch {
+      setMode('idle');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (removed) return null;
+
+  // 收起态：只显示图标，不给菜单入口（点击进入项目）
+  if (collapsed) {
+    return (
+      <Link
+        href={projectHref(item)}
+        onClick={onOpen}
+        title={displayTitle}
+        className="flex items-center justify-center gap-2 rounded-card px-2 py-2 transition-colors duration-[250ms] ease-out hover:bg-paper-deep"
+      >
+        {Icon && <Icon width={16} height={16} className="shrink-0 text-ink-soft" />}
+      </Link>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="group relative">
+      {/* 主体行 */}
+      {mode === 'renaming' ? (
+        <div className="flex items-center gap-2 rounded-card bg-paper-deep px-2 py-2">
+          {Icon && <Icon width={16} height={16} className="shrink-0 text-ink-soft" />}
+          <input
+            autoFocus
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value.slice(0, 60))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') doRename();
+              if (e.key === 'Escape') {
+                setEditTitle(displayTitle);
+                setMode('idle');
+              }
+            }}
+            onBlur={doRename}
+            disabled={busy}
+            className="min-w-0 flex-1 rounded-input border border-clay-deep/30 bg-card px-2 py-1 text-[14px] text-ink outline-none focus:border-clay-deep"
+          />
+        </div>
+      ) : (
+        <Link
+          href={projectHref(item)}
+          onClick={onOpen}
+          title={displayTitle}
+          className="flex items-center gap-2 rounded-card px-2 py-2 pr-8 text-left transition-colors duration-[250ms] ease-out hover:bg-paper-deep"
+        >
+          {Icon && <Icon width={16} height={16} className="shrink-0 text-ink-soft" />}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px] text-ink">{displayTitle}</p>
+            <p className="text-[12px] text-ink-faint">
+              {formatUpdatedAt(item.updated_at)}
+            </p>
+          </div>
+        </Link>
+      )}
+
+      {/* 三点按钮：hover / menuOpen 时显示 */}
+      {mode !== 'renaming' && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setMenuOpen((v) => !v);
+            setMode('idle');
+          }}
+          aria-label="更多操作"
+          className={clsx(
+            'absolute right-1.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-ink-faint transition-opacity duration-[200ms] ease-out hover:bg-card hover:text-ink',
+            menuOpen ? 'opacity-100 bg-card text-ink' : 'opacity-0 group-hover:opacity-100'
+          )}
+        >
+          <MoreHorizontalIcon width={14} height={14} />
+        </button>
+      )}
+
+      {/* 浮层菜单 */}
+      {menuOpen && (
+        <div
+          className="absolute right-1 top-full z-30 mt-1 w-[140px] overflow-hidden rounded-card border border-line bg-card shadow-lg animate-fade-in"
+          role="menu"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              setMode('renaming');
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-ink transition-colors hover:bg-paper-deep"
+            role="menuitem"
+          >
+            <EditIcon width={14} height={14} className="text-ink-soft" />
+            重命名
+          </button>
+          {mode === 'confirming' ? (
+            <button
+              type="button"
+              onClick={doDelete}
+              disabled={busy}
+              className="flex w-full items-center gap-2 border-t border-line px-3 py-2 text-left text-[13px] font-medium text-ember-deep transition-colors hover:bg-ember-mist disabled:opacity-60"
+              role="menuitem"
+            >
+              <TrashIcon width={14} height={14} />
+              确认删除
+              <span
+                role="button"
+                aria-label="取消"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMode('idle');
+                }}
+                className="ml-auto text-ink-faint hover:text-ink"
+              >
+                <CloseIcon width={12} height={12} />
+              </span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setMode('confirming')}
+              className="flex w-full items-center gap-2 border-t border-line px-3 py-2 text-left text-[13px] text-ember-deep transition-colors hover:bg-ember-mist"
+              role="menuitem"
+            >
+              <TrashIcon width={14} height={14} />
+              删除
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* 小禾印章 Logo：柔角方形 + 萌芽豆子卡通吉祥物 */
 function Logo() {
-  const leaf = '#7FA98B';
-  const leafShade = '#5E8A6E';
-  const stroke = '#3E3A36';
-  const soil = '#C9A57B';
-  const soilStroke = '#8B6F4E';
   return (
     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-clay-deep/25 bg-sage-mist">
-      <svg viewBox="0 0 24 24" width={20} height={20} fill="none">
-        <path d="M4.5 21.5 C 6 20, 9 19.4, 12 19.4 C 15 19.4, 18 20, 19.5 21.5 Z" fill={soil} stroke={soilStroke} strokeWidth={1.3} strokeLinejoin="round" />
-        <path d="M11.6 19.6 C 11.9 16, 12.2 12.5, 12.6 8.4" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" fill="none" />
-        <path d="M11.9 15.2 C 10.4 15, 8.8 14.6, 7.4 13.6" stroke={stroke} strokeWidth={1.2} strokeLinecap="round" fill="none" />
-        <path d="M7.4 13.6 C 5.4 13.2, 3.6 12.4, 3 10.8 C 2.8 10.2, 3.2 9.8, 4 9.9 C 5.6 10.1, 7.2 10.9, 8.6 12.2 C 9.2 12.8, 9 13.4, 8.2 13.6 C 7.9 13.68, 7.6 13.64, 7.4 13.6 Z" fill={leaf} stroke={stroke} strokeWidth={1.3} strokeLinejoin="round" />
-        <path d="M4.4 10.8 C 5.6 11.3, 6.8 12, 8 12.6" stroke={leafShade} strokeWidth={0.9} strokeLinecap="round" fill="none" />
-        <path d="M12.6 8.4 C 13.4 7.6, 14.4 6.8, 15.6 6.2" stroke={stroke} strokeWidth={1.2} strokeLinecap="round" fill="none" />
-        <path d="M15.6 6.2 C 17.8 5, 20 5, 21 6.4 C 21.8 7.6, 21.6 9.4, 20.4 11 C 19 12.8, 16.6 13.8, 14.2 13.4 C 12.8 13.2, 12.2 12.4, 12.6 11.2 C 13 10, 14 8.4, 15.6 6.2 Z" fill={leaf} stroke={stroke} strokeWidth={1.3} strokeLinejoin="round" />
-        <path d="M13.6 12 C 15.4 10.6, 17.2 9.2, 19.4 7.8" stroke={leafShade} strokeWidth={1} strokeLinecap="round" fill="none" />
-      </svg>
+      <BrandmarkGlyph size={22} />
     </span>
   );
 }

@@ -9,18 +9,38 @@ export function ossObjectUrl(key: string): string {
   return `${OSS_BASE}/${key}`;
 }
 
-/** 浏览器端直传视频到 OSS，返回上传后的公开直链 */
-export async function uploadVideoToOss(file: File): Promise<string> {
+/**
+ * 浏览器端直传视频到 OSS，返回上传后的公开直链。
+ * 用 XHR 而非 fetch，是为了拿到 upload progress 事件（fetch 目前浏览器不支持上传进度）。
+ * onProgress 回调 0~100 整数。
+ */
+export function uploadVideoToOss(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<string> {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
   const rand = Math.random().toString(36).slice(2, 10);
   const key = `videos/${Date.now()}-${rand}.${ext}`;
   const url = ossObjectUrl(key);
 
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type || 'video/mp4' },
-    body: file,
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.floor((e.loaded / e.total) * 100);
+      onProgress?.(Math.min(99, pct)); // 服务端 200 前留 1% 缓冲，避免立刻满 100 又跳回
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve(url);
+      } else {
+        reject(new Error(`上传失败 (HTTP ${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('上传失败，请检查网络'));
+    xhr.send(file);
   });
-  if (!res.ok) throw new Error(`上传失败 (HTTP ${res.status})`);
-  return url;
 }

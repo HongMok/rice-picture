@@ -39,3 +39,8 @@ resources/
 design-preview.html
 game-preview.html
 logo-preview.html
+.env*
+
+# 本地 dev 日志
+dev.log
+

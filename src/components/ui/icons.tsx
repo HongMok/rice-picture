@@ -184,6 +184,14 @@ export const ChatIcon = (p: P) => (
   </Base>
 );
 
+export const GraduationIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M3 9.5 12 5l9 4.5-9 4.5-9-4.5Z" />
+    <path d="M7 11.5v4.2c0 .8 2.2 2.3 5 2.3s5-1.5 5-2.3v-4.2" />
+    <path d="M20 10v5" />
+  </Base>
+);
+
 export const ToolboxIcon = (p: P) => (
   <Base {...p}>
     <rect x="3.5" y="9" width="17" height="10.5" rx="2" />
@@ -304,5 +312,22 @@ export const MoleIcon = (p: P) => (
     <circle cx="10" cy="14.5" r="0.6" fill="currentColor" stroke="none" />
     <circle cx="14" cy="14.5" r="0.6" fill="currentColor" stroke="none" />
     <path d="M11.3 16.2h1.4" />
+  </Base>
+);
+
+/** 横向三点（Kebab / More）—— 悬浮菜单触发器 */
+export const MoreHorizontalIcon = (p: P) => (
+  <Base {...p}>
+    <circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    <circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+  </Base>
+);
+
+/** 编辑铅笔（重命名等） */
+export const EditIcon = (p: P) => (
+  <Base {...p}>
+    <path d="M4 20.5h4.5L18.4 10.6a2 2 0 0 0-2.8-2.8L5.5 17.6Z" />
+    <path d="M13.5 6.5l4 4" />
   </Base>
 );

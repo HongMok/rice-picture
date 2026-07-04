@@ -9,6 +9,7 @@ export interface ChatSessionRow {
   user_id: number | null;
   title: string | null;
   messages: ChatMessage[];
+  child_id: number | null;
 }
 
 function titleFromFirstUserMessage(messages: ChatMessage[]): string {
@@ -22,13 +23,19 @@ function titleFromFirstUserMessage(messages: ChatMessage[]): string {
 export async function createChatSession(params: {
   userId: number;
   messages: ChatMessage[];
+  childId?: number | null;
 }): Promise<ChatSessionRow> {
   const title = titleFromFirstUserMessage(params.messages);
   const rows = await query<ChatSessionRow>(
-    `insert into chat_sessions (user_id, title, messages)
-     values ($1, $2, $3::jsonb)
-     returning id, created_at, updated_at, user_id, title, messages`,
-    [params.userId, title, JSON.stringify(params.messages)]
+    `insert into chat_sessions (user_id, title, messages, child_id)
+     values ($1, $2, $3::jsonb, $4)
+     returning id, created_at, updated_at, user_id, title, messages, child_id`,
+    [
+      params.userId,
+      title,
+      JSON.stringify(params.messages),
+      params.childId ?? null,
+    ]
   );
   return rows[0];
 }
@@ -53,12 +60,25 @@ export async function getChatSession(params: {
   userId: number;
 }): Promise<ChatSessionRow | null> {
   const row = await queryOne<ChatSessionRow>(
-    `select id, created_at, updated_at, user_id, title, messages
+    `select id, created_at, updated_at, user_id, title, messages, child_id
        from chat_sessions
       where id = $1 and user_id = $2 and deleted_at is null`,
     [params.id, params.userId]
   );
   return row;
+}
+
+/** 重命名会话（用户手动改标题）。 */
+export async function renameChatSession(params: {
+  id: number;
+  userId: number;
+  title: string;
+}): Promise<void> {
+  await query(
+    `update chat_sessions set title = $1, updated_at = now()
+      where id = $2 and user_id = $3 and deleted_at is null`,
+    [params.title, params.id, params.userId]
+  );
 }
 
 /** 软删（Library 统一走 deleted_at）。 */

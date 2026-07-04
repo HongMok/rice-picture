@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { Button, Input, FieldLabel } from '~/components/ui';
-import { CheckIcon } from '~/components/ui/icons';
+import { useMemo, useState } from 'react';
+import { Button, Input, FieldLabel, useToast } from '~/components/ui';
+import { CheckIcon, ChevronRightIcon } from '~/components/ui/icons';
 import {
   DIAGNOSES,
   SEVERITIES,
@@ -21,6 +21,8 @@ export interface Child {
   weaknesses: string[];
   interests: string[];
   total_points?: number;
+  game_count?: number;
+  video_count?: number;
 }
 
 interface ChildFormProps {
@@ -29,9 +31,9 @@ interface ChildFormProps {
   onSaved: (c: Child, isEdit: boolean) => void;
   /** 保存按钮文案，默认「保存」/「保存修改」 */
   submitLabel?: { create?: string; edit?: string };
-  /** 顶部主标题，默认「新建孩子个案」/「编辑「昵称」的个案」 */
+  /** 顶部主标题；不传时由外层容器提供（如 FormShell） */
   title?: { create?: string; edit?: (nickname: string) => string };
-  /** 顶部副标题描述 */
+  /** 顶部提示文案 */
   subtitle?: string;
   /** 兴趣偏好下方的提示，可传空字符串隐藏 */
   interestsHint?: string;
@@ -57,13 +59,27 @@ export function ChildForm({
   const [interests, setInterests] = useState<string[]>(initial?.interests || []);
   const [saving, setSaving] = useState(false);
 
-  const headerTitle = isEdit
-    ? title?.edit?.(initial!.nickname) ?? `编辑「${initial!.nickname}」的个案`
-    : title?.create ?? '新建孩子个案';
+  const toast = useToast();
+
+  const initialMoreOpen = useMemo(
+    () =>
+      !!(
+        initial?.severity ||
+        (initial?.weaknesses && initial.weaknesses.length > 0) ||
+        (initial?.strengths && initial.strengths.length > 0)
+      ),
+    [initial]
+  );
+  const [moreOpen, setMoreOpen] = useState(initialMoreOpen);
+
+  const headerTitle = title
+    ? isEdit
+      ? title.edit?.(initial!.nickname) ?? `编辑「${initial!.nickname}」的个案`
+      : title.create ?? '新建孩子个案'
+    : null;
 
   const headerSubtitle =
-    subtitle ??
-    '这些信息只用于定制出题：能力偏弱决定训练重点，兴趣（偏好物）决定题目主角与画面。';
+    subtitle ?? '只用于给这个孩子定制题目和报告，不会外传。';
 
   const hint =
     interestsHint ??
@@ -74,7 +90,15 @@ export function ChildForm({
 
   async function submit() {
     if (!nickname.trim()) {
-      alert('请填写孩子的称呼');
+      toast.warning('请填写孩子的姓名 / 化名');
+      return;
+    }
+    if (!age.trim()) {
+      toast.warning('请填写年龄');
+      return;
+    }
+    if (!gender) {
+      toast.warning('请选择性别');
       return;
     }
     setSaving(true);
@@ -98,36 +122,48 @@ export function ChildForm({
       );
       const d = await res.json();
       if (!res.ok) {
-        alert(d.error || '保存失败');
+        toast.error(d.error || '保存失败');
         return;
       }
+      toast.success(isEdit ? '已保存' : '已创建');
       onSaved(d.child, isEdit);
     } catch {
-      alert('网络错误');
+      toast.error('网络错误，请重试');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-2xl animate-fade-in rounded-section border border-line bg-white p-6">
-      <h2 className="mb-1 text-xl text-ink">{headerTitle}</h2>
-      <p className="mb-5 text-sm text-ink-faint">{headerSubtitle}</p>
+    <div>
+      {headerTitle && <h2 className="mb-1 text-xl text-ink">{headerTitle}</h2>}
+      {headerSubtitle && (
+        <p className="mb-6 text-xs leading-[1.9] text-ink-faint">{headerSubtitle}</p>
+      )}
 
       <div className="grid gap-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <FieldLabel required>称呼 / 化名</FieldLabel>
-            <Input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="如：小宇" />
+            <FieldLabel required>姓名 / 化名</FieldLabel>
+            <Input
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="如：小宇"
+            />
           </div>
           <div>
-            <FieldLabel>年龄</FieldLabel>
-            <Input value={age} onChange={(e) => setAge(e.target.value.replace(/\D/g, ''))} placeholder="如：6" inputMode="numeric" />
+            <FieldLabel required>年龄</FieldLabel>
+            <Input
+              value={age}
+              onChange={(e) => setAge(e.target.value.replace(/\D/g, ''))}
+              placeholder="如：6"
+              inputMode="numeric"
+            />
           </div>
         </div>
 
         <div>
-          <FieldLabel>性别</FieldLabel>
+          <FieldLabel required>性别</FieldLabel>
           <div className="flex gap-2">
             {[
               ['boy', '男孩'],
@@ -139,7 +175,9 @@ export function ChildForm({
                 onClick={() => setGender(gender === v ? '' : v)}
                 className={
                   'rounded-card border px-4 py-2 text-sm transition-colors duration-[450ms] ' +
-                  (gender === v ? 'border-clay bg-clay-mist text-clay' : 'border-line text-ink-soft hover:border-clay')
+                  (gender === v
+                    ? 'border-clay bg-clay-mist text-clay'
+                    : 'border-line text-ink-soft hover:border-clay')
                 }
               >
                 {l}
@@ -148,33 +186,87 @@ export function ChildForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <FieldLabel>诊断类型</FieldLabel>
-            <Select value={diagnosis} onChange={setDiagnosis} options={DIAGNOSES} placeholder="请选择" />
-          </div>
-          <div>
-            <FieldLabel>程度</FieldLabel>
-            <Select value={severity} onChange={setSeverity} options={SEVERITIES} placeholder="请选择" />
-          </div>
+        <div>
+          <FieldLabel>诊断类型</FieldLabel>
+          <Select
+            value={diagnosis}
+            onChange={setDiagnosis}
+            options={DIAGNOSES}
+            placeholder="请选择"
+          />
         </div>
 
         <div>
-          <FieldLabel>能力较强（可多选）</FieldLabel>
-          <TagPicker options={ABILITY_TAGS} value={strengths} onChange={setStrengths} />
-        </div>
-        <div>
-          <FieldLabel>重点训练 / 偏弱方向（可多选）</FieldLabel>
-          <TagPicker options={ABILITY_TAGS} value={weaknesses} onChange={setWeaknesses} />
-        </div>
-        <div>
-          <FieldLabel>兴趣偏好 / 偏好物（可多选、可自定义）</FieldLabel>
-          <TagPicker options={INTEREST_TAGS} value={interests} onChange={setInterests} allowCustom />
+          <FieldLabel>兴趣偏好 / 偏好物</FieldLabel>
+          <TagPicker
+            options={INTEREST_TAGS}
+            value={interests}
+            onChange={setInterests}
+            allowCustom
+          />
           {hint && <p className="mt-1.5 text-xs text-ink-faint">{hint}</p>}
+        </div>
+
+        <div className="border-t border-line pt-4">
+          <button
+            type="button"
+            onClick={() => setMoreOpen((v) => !v)}
+            className="flex w-full items-center justify-between text-left text-xs font-medium text-ink-soft transition-colors duration-[450ms] hover:text-clay"
+          >
+            <span>
+              更多信息
+              <span className="ml-1.5 font-normal text-ink-faint">
+                （程度 · 重点训练 · 能力较强，选填）
+              </span>
+            </span>
+            <ChevronRightIcon
+              width={14}
+              height={14}
+              className={
+                'transition-transform duration-[450ms] ' +
+                (moreOpen ? 'rotate-90' : '')
+              }
+            />
+          </button>
+
+          {moreOpen && (
+            <div className="mt-4 grid gap-5 animate-fade-in">
+              <div>
+                <FieldLabel>程度</FieldLabel>
+                <Select
+                  value={severity}
+                  onChange={setSeverity}
+                  options={SEVERITIES}
+                  placeholder="请选择"
+                />
+              </div>
+
+              <div>
+                <FieldLabel>重点训练 / 偏弱方向</FieldLabel>
+                <TagPicker
+                  options={ABILITY_TAGS}
+                  value={weaknesses}
+                  onChange={setWeaknesses}
+                />
+                <p className="mt-1.5 text-xs text-ink-faint">
+                  决定游戏出题、教案抓什么弱项。可多选。
+                </p>
+              </div>
+
+              <div>
+                <FieldLabel>能力较强</FieldLabel>
+                <TagPicker
+                  options={ABILITY_TAGS}
+                  value={strengths}
+                  onChange={setStrengths}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="mt-6 flex justify-end gap-3">
+      <div className="mt-8 flex justify-end gap-3">
         <Button variant="outline" onClick={onCancel}>
           取消
         </Button>

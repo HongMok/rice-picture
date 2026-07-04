@@ -62,6 +62,8 @@ export function VideoStudio() {
   const [view, setView] = useState<View>({ kind: 'list' });
   const [loading, setLoading] = useState(true);
   const [childFilter, setChildFilter] = useState<ChildFilter>(null);
+  // 上传进度 0~100；null 表示当前不在上传（已上传完或未开始）
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimer = () => timer.current && clearTimeout(timer.current);
@@ -78,6 +80,26 @@ export function VideoStudio() {
   }, []);
 
   useEffect(() => {
+    load();
+  }, [load]);
+
+  /* ---------- 页面重新可见/获得焦点时刷新（切到"个案管理"新建孩子后回来能同步）---------- */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    window.addEventListener('focus', load);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', load);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load]);
+
+  /* ---------- 打开新建分析表单前，先拉一次最新 children（防止用户刚建完个案就进来选不到）---------- */
+  const openCompose = useCallback(async () => {
+    setView({ kind: 'compose' });
+    // 不 await，先展示表单再补数据，避免点击后有卡顿感
     load();
   }, [load]);
 
@@ -214,19 +236,32 @@ export function VideoStudio() {
     };
   }, [view, poll]);
 
-  /* ---------- 提交分析：立刻切到分析中界面（可离开），后台异步跑 POST ---------- */
-  async function submit(payload: { videoUrl: string; childId: number | null; title: string }) {
+  /* ---------- 提交分析：立刻切到分析中界面（可离开），后台异步跑上传 + POST ---------- */
+  async function submit(payload: { file: File; childId: number | null; title: string }) {
     clearTimer();
-    // 立刻进分析视图，让用户看到"AI 已经在做事了"。此时还没拿到记录 id（POST 会跑很久），
-    // 由 pending-analyzing 分支通过定时拉列表找到刚建的 ANALYZING 记录，再切到 id 轮询。
+    // 立刻进分析视图，第一步"上传视频"实时展示进度百分比；上传完了再触发 POST。
+    // 此时还没拿到记录 id（POST 会长跑），由 pending-analyzing effect 通过定时拉列表
+    // 找到刚建的 ANALYZING 记录，再切到 id 轮询。
     const startedAt = Date.now();
+    setUploadPct(0);
     setView({ kind: 'analyzing', id: -1, startedAt });
+
+    let videoUrl: string;
+    try {
+      videoUrl = await uploadVideoToOss(payload.file, (pct) => setUploadPct(pct));
+    } catch (err: any) {
+      setUploadPct(null);
+      setView({ kind: 'compose' });
+      alert(err?.message || '上传失败，请重试');
+      return;
+    }
+    setUploadPct(100);
 
     // POST 不阻塞：请求内部会先建 ANALYZING 记录再跑模型；前置校验错才有必要弹窗
     fetch('/api/videos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ videoUrl, childId: payload.childId, title: payload.title }),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -234,6 +269,7 @@ export function VideoStudio() {
             const data = await res.json();
             if (!data?.id) {
               // 前置校验失败，没有建记录：退回 compose
+              setUploadPct(null);
               setView({ kind: 'compose' });
               alert(data?.error || '提交失败，请重试');
               return;
@@ -263,6 +299,7 @@ export function VideoStudio() {
     return (
       <AnalyzingView
         startedAt={view.startedAt}
+        uploadPct={uploadPct}
         onBack={() => {
           clearTimer();
           setView({ kind: 'list' });
@@ -304,7 +341,7 @@ export function VideoStudio() {
             选一段课堂录像，AI 分析孩子与老师的课堂表现，生成可给家长的报告
           </p>
         </div>
-        <Button className="gap-1.5" onClick={() => setView({ kind: 'compose' })}>
+        <Button className="gap-1.5" onClick={openCompose}>
           <PlusIcon />
           新建分析
         </Button>
@@ -364,10 +401,6 @@ function ListSection({
   onChildFilterChange: (f: ChildFilter) => void;
   onOpen: (a: VideoAnalysis) => void;
 }) {
-  // 仅列出出现过在历史里的孩子（避免筛选没意义的空项）
-  const childIdsInHistory = new Set(
-    history.map((a) => a.childId ?? null).filter((v): v is number => typeof v === 'number')
-  );
   const hasUnlinked = history.some((a) => !a.childId);
 
   // 过滤 + 按 createdAt 倒序（无 createdAt 的排最后）
@@ -384,16 +417,15 @@ function ListSection({
       return tb - ta;
     });
 
+  // 列出所有个案，方便刚建完个案能立刻筛到。count=0 也保留，只是视觉更淡。
   const chips: { key: string; label: string; value: ChildFilter; count: number }[] = [
     { key: 'all', label: '全部', value: null, count: history.length },
-    ...children
-      .filter((c) => childIdsInHistory.has(c.id))
-      .map((c) => ({
-        key: `c-${c.id}`,
-        label: c.nickname,
-        value: c.id as ChildFilter,
-        count: history.filter((a) => a.childId === c.id).length,
-      })),
+    ...children.map((c) => ({
+      key: `c-${c.id}`,
+      label: c.nickname,
+      value: c.id as ChildFilter,
+      count: history.filter((a) => a.childId === c.id).length,
+    })),
   ];
   if (hasUnlinked) {
     chips.push({
@@ -412,6 +444,7 @@ function ListSection({
             const active =
               (childFilter === null && chip.value === null) ||
               (childFilter !== null && chip.value === childFilter);
+            const empty = !active && chip.count === 0;
             return (
               <button
                 key={chip.key}
@@ -420,6 +453,8 @@ function ListSection({
                   'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ' +
                   (active
                     ? 'border-clay bg-clay text-white'
+                    : empty
+                    ? 'border-line/60 bg-white text-ink-faint hover:border-clay hover:text-clay'
                     : 'border-line bg-white text-ink-soft hover:border-clay hover:text-clay')
                 }
               >
@@ -553,8 +588,7 @@ function StatusChip({ status }: { status: string }) {
     },
     FAILED: {
       label: '失败',
-      cls: '',
-      style: { backgroundColor: '#F4E5E5', color: '#C08585', borderColor: '#E8C7C7' },
+      cls: 'border-danger/40 bg-danger-mist text-danger',
     },
   };
   const item = map[status] || { label: '', cls: '' };
@@ -585,24 +619,57 @@ function StatusChip({ status }: { status: string }) {
 /* ---------------- 分析进度视图：按步骤打勾展示后台工作 ---------------- */
 function AnalyzingView({
   startedAt,
+  uploadPct,
   onBack,
 }: {
   startedAt: number;
+  uploadPct: number | null;
   onBack: () => void;
 }) {
-  // 用「已过秒数」推进步骤打勾；总预计 ~120s，均匀分给步骤，末步保留缓冲。
-  // 就算轮询更快回来（DONE 直接切走）也不用担心；只是给用户「看到有在做事」。
+  // 上传阶段（uploadPct != null && < 100）阻塞后续分析步骤——上传没完成模型看不到视频。
+  // 上传完成后开始计时推进分析步骤。
+  const uploading = uploadPct !== null && uploadPct < 100;
+  const [uploadDoneAt, setUploadDoneAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (uploadPct === 100 && uploadDoneAt == null) setUploadDoneAt(Date.now());
+    if (uploadPct === null) setUploadDoneAt(null);
+  }, [uploadPct, uploadDoneAt]);
+
   const stepDurationMs = 18000;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
   }, []);
-  const elapsedMs = Math.max(0, now - startedAt);
+  const analyzeStartAt = uploadDoneAt ?? (uploadPct === null ? startedAt : now);
+  const analyzeElapsedMs = uploading ? 0 : Math.max(0, now - analyzeStartAt);
   const totalSteps = ANALYZE_STEPS.length;
-  // 第 i 步在 elapsedMs 达到 (i+1)*stepDurationMs 时打勾；最后一步保留到实际完成才打勾。
-  const rawCompleted = Math.min(totalSteps - 1, Math.floor(elapsedMs / stepDurationMs));
-  const activeIndex = Math.min(totalSteps - 1, rawCompleted); // 当前进行中的一步
+  const rawCompleted = Math.min(totalSteps - 1, Math.floor(analyzeElapsedMs / stepDurationMs));
+  const activeIndex = uploading ? -1 : Math.min(totalSteps - 1, rawCompleted);
+
+  // 上传步骤：uploading→进行中；uploadPct===100 或 null（已过上传阶段）→已完成
+  const uploadDone = uploadPct === null || uploadPct >= 100;
+
+  const overallElapsed = Math.floor((now - startedAt) / 1000);
+
+  // 圆环 = 下方所有步骤的整体进度（1 上传 + 6 分析 = 7 步）。
+  // 已完成的步骤各占 1，当前正在进行的步骤按其内部进度加权（上传用真实百分比，分析步骤按时间线性推进）。
+  const allSteps = 1 + totalSteps;
+  let ringPct: number;
+  if (uploading) {
+    // 只完成了上传步骤的一部分
+    ringPct = Math.floor(((uploadPct ?? 0) / 100) * (100 / allSteps));
+  } else {
+    const uploadShare = 100 / allSteps; // 上传占一格
+    const perStepShare = 100 / allSteps; // 每个分析步骤占一格
+    // 已完成的分析步骤 = activeIndex；正在进行的这一步按其内部时间比例（0~1）
+    const stepElapsed = analyzeElapsedMs - activeIndex * stepDurationMs;
+    const inStepRatio = Math.min(1, Math.max(0, stepElapsed / stepDurationMs));
+    const analyzedPct = activeIndex * perStepShare + inStepRatio * perStepShare;
+    // 分析全部结束前封顶到 99%，防止未 DONE 就显示 100%
+    ringPct = Math.min(99, Math.floor(uploadShare + analyzedPct));
+  }
+  const ringColor = uploading ? AMBER.solid : '#5E8A6E'; // sage-deep
 
   return (
     <div className="mx-auto max-w-xl animate-fade-in">
@@ -611,19 +678,76 @@ function AnalyzingView({
       </button>
       <div className="rounded-section border border-line bg-white p-6 sm:p-8">
         <div className="flex items-center gap-3">
-          <Spinner className="h-6 w-6 text-clay" />
+          <ProgressRing pct={ringPct} color={ringColor} />
           <div>
-            <h2 className="text-lg text-ink">AI 正在分析这段课堂视频</h2>
+            <h2 className="text-lg text-ink">
+              {uploading ? '正在上传课堂视频…' : 'AI 正在分析这段课堂视频'}
+            </h2>
             <p className="mt-0.5 text-xs text-ink-faint">
-              通常 1–3 分钟。你可以停在这里看进度，也可以离开去做别的，完成后在列表里点开报告即可。
+              {uploading
+                ? '视频上传完成后立即进入 AI 分析，通常整体 2–5 分钟。'
+                : '通常 1–3 分钟。你可以停在这里看进度，也可以离开去做别的，完成后在列表里点开报告即可。'}
             </p>
           </div>
         </div>
 
         <ol className="mt-6 space-y-3">
+          {/* 步骤 0：上传视频（带百分比进度条） */}
+          <li className="flex items-start gap-3">
+            <span
+              className={
+                'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ' +
+                (uploadDone
+                  ? 'bg-sage text-white'
+                  : uploading
+                  ? 'text-white'
+                  : 'bg-line/60 text-ink-faint')
+              }
+              style={uploading ? { backgroundColor: AMBER.solid } : undefined}
+            >
+              {uploadDone ? '✓' : uploading ? <Spinner className="h-3 w-3 text-white" /> : '1'}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p
+                className={
+                  'text-sm font-medium ' +
+                  (uploadDone ? 'text-sage-deep' : uploading ? 'text-ink' : 'text-ink-faint')
+                }
+              >
+                上传视频
+                {uploading && (
+                  <span
+                    className="ml-1 text-xs"
+                    style={{ color: AMBER.deep }}
+                  >
+                    {uploadPct}%
+                  </span>
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-ink-faint">
+                {uploading
+                  ? '直传到对象存储，网络越快越顺'
+                  : uploadDone
+                  ? '视频已就绪'
+                  : '直传到对象存储'}
+              </p>
+              {uploading && (
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-line/60">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${uploadPct}%`,
+                      backgroundColor: AMBER.solid,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </li>
+
           {ANALYZE_STEPS.map((s, i) => {
-            const done = i < activeIndex;
-            const running = i === activeIndex;
+            const done = !uploading && i < activeIndex;
+            const running = !uploading && i === activeIndex;
             return (
               <li key={s.label} className="flex items-start gap-3">
                 <span
@@ -636,7 +760,7 @@ function AnalyzingView({
                       : 'bg-line/60 text-ink-faint')
                   }
                 >
-                  {done ? '✓' : running ? <Spinner className="h-3 w-3 text-white" /> : i + 1}
+                  {done ? '✓' : running ? <Spinner className="h-3 w-3 text-white" /> : i + 2}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p
@@ -656,14 +780,60 @@ function AnalyzingView({
         </ol>
 
         <p className="mt-6 border-t border-line pt-3 text-center text-[11px] text-ink-faint">
-          已耗时 {Math.floor(elapsedMs / 1000)} 秒 · 分析完成后这条记录会自动变成「已完成」
+          已耗时 {overallElapsed} 秒 · 分析完成后这条记录会自动变成「已完成」
         </p>
       </div>
     </div>
   );
 }
 
-/* ---------------- 新建分析：上传视频 + 选个案 + 标题 ---------------- */
+/** 圆环百分比进度指示器（纯 SVG，无依赖）。pct 0~100，中间显示整数百分比。 */
+function ProgressRing({ pct, color }: { pct: number; color: string }) {
+  const size = 44;
+  const stroke = 4;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const clamped = Math.min(100, Math.max(0, pct));
+  const dash = (clamped / 100) * circ;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+      <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="#ECE7DF"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${circ - dash}`}
+          style={{ transition: 'stroke-dasharray 0.4s ease-out' }}
+        />
+      </g>
+      <text
+        x={size / 2}
+        y={size / 2}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={11}
+        fontWeight={600}
+        fill={color}
+      >
+        {clamped}%
+      </text>
+    </svg>
+  );
+}
+
+/* ---------------- 新建分析：选视频 + 选个案 + 标题（上传由父组件在分析视图里做）---------------- */
 function Composer({
   children,
   onBack,
@@ -671,14 +841,12 @@ function Composer({
 }: {
   children: Child[];
   onBack: () => void;
-  onSubmit: (p: { videoUrl: string; childId: number | null; title: string }) => void;
+  onSubmit: (p: { file: File; childId: number | null; title: string }) => void;
 }) {
   const [childId, setChildId] = useState<number | null>(null);
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const child = children.find((c) => c.id === childId) || null;
@@ -695,21 +863,12 @@ function Composer({
   }, [file]);
 
   function pickFile(f: File | null) {
-    setUploadError('');
     setFile(f);
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
     if (!file) return;
-    setUploading(true);
-    setUploadError('');
-    try {
-      const videoUrl = await uploadVideoToOss(file);
-      onSubmit({ videoUrl, childId, title: title.trim() });
-    } catch (err: any) {
-      setUploadError(err?.message || '上传失败，请重试');
-      setUploading(false);
-    }
+    onSubmit({ file, childId, title: title.trim() });
   }
 
   return (
@@ -750,8 +909,7 @@ function Composer({
                   <button
                     type="button"
                     onClick={() => pickFile(null)}
-                    disabled={uploading}
-                    className="shrink-0 text-xs text-ink-faint hover:text-clay disabled:opacity-40"
+                    className="shrink-0 text-xs text-ink-faint hover:text-clay"
                   >
                     重新选择
                   </button>
@@ -763,9 +921,6 @@ function Composer({
             <p className="mt-1.5 text-xs text-ink-faint">
               建议 5 分钟内、200MB 以内，过大的视频上传和分析都会更慢
             </p>
-            {uploadError && (
-              <p className="mt-1.5 text-xs" style={{ color: '#C08585' }}>{uploadError}</p>
-            )}
           </div>
 
           {/* 关联个案 */}
@@ -807,12 +962,12 @@ function Composer({
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="outline" onClick={onBack} disabled={uploading}>
+          <Button variant="outline" onClick={onBack}>
             取消
           </Button>
-          <Button className="gap-1.5" disabled={!file || uploading} loading={uploading} onClick={handleSubmit}>
+          <Button className="gap-1.5" disabled={!file} onClick={handleSubmit}>
             <SparkleIcon width={16} height={16} />
-            {uploading ? '上传中…' : '开始分析'}
+            开始分析
           </Button>
         </div>
       </div>
@@ -897,11 +1052,17 @@ function ReportView({
 
   const openAt = useCallback((sec: number) => setSeekTo(sec), []);
 
+  const reportRef = useRef<HTMLDivElement | null>(null);
   async function downloadPdf() {
+    if (!reportRef.current) return;
     setPdfBusy(true);
     try {
-      await exportReportPdf(title, report);
-    } catch {
+      const suffix = tab === 'child' ? '_学生' : '_老师';
+      await exportReportPdf(title, reportRef.current, {
+        filename: `${title || 'report'}${suffix}`,
+      });
+    } catch (err) {
+      console.error(err);
       alert('PDF 生成失败，请重试');
     } finally {
       setPdfBusy(false);
@@ -911,24 +1072,24 @@ function ReportView({
   return (
     <SeekContext.Provider value={openAt}>
       <div className="mx-auto max-w-3xl animate-fade-in">
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex items-center justify-between gap-3" data-pdf-hide>
           <button onClick={onBack} className="text-sm text-ink-faint hover:text-ink">
             ← 返回列表
           </button>
           <Button variant="outline" className="gap-1.5" loading={pdfBusy} onClick={downloadPdf}>
             <DownloadIcon width={16} height={16} />
-            导出 PDF 给家长
+            {tab === 'child' ? '导出学生报告 PDF' : '导出老师报告 PDF'}
           </Button>
         </div>
 
-        <div className="space-y-5">
+        <div ref={reportRef} className="space-y-5">
           {/* 概述（共享） */}
           <div className="rounded-section border border-line bg-white p-6">
             <h2 className="text-xl text-ink">{title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-soft">
               {report.summary || '（无整体概述）'}
             </p>
-            <p className="mt-3 text-xs text-ink-faint">
+            <p className="mt-3 text-xs text-ink-faint" data-pdf-hide>
               提示：报告中带下划线的时间（如 <span className="font-mono text-clay">▸ 01:20</span>）可点击，会弹出视频并跳到对应位置。
             </p>
           </div>
@@ -958,8 +1119,11 @@ function ReportView({
             </Section>
           )}
 
-          {/* 学生 / 老师 二级 tab */}
-          <div className="flex w-full gap-1 rounded-card border border-line bg-white p-1">
+          {/* 学生 / 老师 二级 tab（PDF 不需要，导出时隐藏） */}
+          <div
+            className="flex w-full gap-1 rounded-card border border-line bg-white p-1"
+            data-pdf-hide
+          >
             {(
               [
                 ['child', '👧 学生表现'],
@@ -990,7 +1154,9 @@ function ReportView({
                 <p className="mt-2 text-sm leading-relaxed text-ink-soft">
                   {report.childSummary || '（该次报告未生成学生总结）'}
                 </p>
-                <InsightPanel key={`child-${analysis.id}`} analysisId={analysis.id} scope="child" />
+                <div data-pdf-hide>
+                  <InsightPanel key={`child-${analysis.id}`} analysisId={analysis.id} scope="child" />
+                </div>
               </div>
 
               {report.childRadar.length > 0 && (
@@ -1090,7 +1256,9 @@ function ReportView({
                 <p className="mt-2 text-sm leading-relaxed text-ink-soft">
                   {report.teacherSummary || '（该次报告未生成老师总结）'}
                 </p>
-                <InsightPanel key={`teacher-${analysis.id}`} analysisId={analysis.id} scope="teacher" />
+                <div data-pdf-hide>
+                  <InsightPanel key={`teacher-${analysis.id}`} analysisId={analysis.id} scope="teacher" />
+                </div>
               </div>
 
               {report.teacherScores.length > 0 && (
@@ -1773,7 +1941,7 @@ function DttPanel({ dtt }: { dtt: DttStats }) {
     { label: '回合总数', value: dtt.totalTrials, cls: 'text-ink' },
     { label: '独立正确', value: dtt.independentCorrect, cls: 'text-sage-deep' },
     { label: '提示下正确', value: dtt.promptedCorrect, cls: 'text-clay' },
-    { label: '错误/无反应', value: dtt.incorrect, cls: '', style: { color: '#C08585' } },
+    { label: '错误/无反应', value: dtt.incorrect, cls: 'text-danger' },
   ];
   const pl = dtt.promptLevels;
   const plTotal = pl.verbal + pl.gesture + pl.physical;

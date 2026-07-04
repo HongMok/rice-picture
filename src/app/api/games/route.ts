@@ -89,25 +89,47 @@ export async function POST(req: Request) {
         const label = character ? `${character}-${r.answer}` : r.answer;
         const k = keyOf('emotion', label);
         if (!specMap.has(k)) {
+          const primary = characterVisual
+            ? `${characterVisual}，脸上是「${r.answer}」的表情，单个角色居中，表情清晰夸张易懂`
+            : `一个卡通小朋友，脸上是「${r.answer}」的表情，单个头像居中，表情清晰夸张易懂`;
+          // 降级：具象 IP 形象会被视觉审查拒稿；退成"普通小朋友 + 相关玩具/贴纸"，
+          //   仍保留代入感（如手里拿着佩奇玩偶），但不画 IP 本尊
+          const fallback = character
+            ? `一个可爱的卡通小朋友，脸上是「${r.answer}」的表情，手里拿着与「${character}」相关的玩具或贴纸，单个头像居中，表情清晰夸张易懂`
+            : `一个可爱的卡通小朋友，脸上是「${r.answer}」的表情，单个头像居中，表情清晰夸张易懂`;
           specMap.set(k, {
             kind: 'emotion',
             label,
             emotion: r.answer,
-            prompt: characterVisual
-              ? `${characterVisual}，脸上是「${r.answer}」的表情，单个角色居中，表情清晰夸张易懂`
-              : `一个卡通小朋友，脸上是「${r.answer}」的表情，单个头像居中，表情清晰夸张易懂`,
+            prompt: primary,
+            fallbackPrompt: fallback,
           });
         }
       }
     } else {
-      // 配对题：只给「目标物」生图，选项保持文字
+      // 配对题：只给「目标物」生图，选项保持文字。
+      // label 里如果含 IP 名（如"佩奇的房子"）会被生图拒稿，
+      // 用 characterVisual 的去版权化描述替换掉，label 键本身保留原名做缓存。
       for (const r of rounds as MatchRound[]) {
         const k = keyOf('object', r.label);
         if (!specMap.has(k)) {
+          // 首试：label 含 IP 名 → 用 characterVisual 描述替换
+          const safeLabel =
+            character && characterVisual && r.label.includes(character)
+              ? r.label.replace(character, characterVisual)
+              : r.label;
+          const primary = `一个「${safeLabel}」，单个物体居中，简洁可爱的教学图标`;
+          // 降级：把 IP 名彻底去掉（"佩奇的红鞋子" → "红鞋子"）
+          const stripped =
+            character && r.label.includes(character)
+              ? r.label.replace(new RegExp(`${character}的?`, 'g'), '').trim() || r.label
+              : r.label;
+          const fallback = `一个「${stripped}」，单个物体居中，简洁可爱的教学图标`;
           specMap.set(k, {
             kind: 'object',
             label: r.label,
-            prompt: `一个「${r.label}」，单个物体居中，简洁可爱的教学图标`,
+            prompt: primary,
+            fallbackPrompt: fallback,
           });
         }
       }

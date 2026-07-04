@@ -70,8 +70,12 @@ function buildMessages(
       .filter(Boolean)
       .join('\n');
   } else {
+    const character = (characterOverride || child?.interests?.[0] || '').trim();
     task = [
       `出 ${roundCount} 道「认知配对」题。每题给一个目标物，让孩子从选项里找出同一类或同颜色的。`,
+      character
+        ? `孩子的偏好物是「${character}」。至少有一题的目标物或选项与它相关（如偏好=小猪佩奇则可用"佩奇的红鞋子/佩奇的家"等具体物件），其它题也尽量围绕它相关的世界观、场景、物品出题，让孩子有代入感。`
+        : '',
       '每题字段：',
       '- category："category"（找同类）或 "color"（找同色）；',
       '- label：目标物名称（用孩子熟悉/感兴趣的具体名词）；',
@@ -80,7 +84,9 @@ function buildMessages(
       '- options：4 个选项名称，必须包含 answer，其余为明显不同类/不同色的干扰项，打乱顺序。',
       '所有名称都用常见、可画成简单图标的具体事物。',
       '输出：{"title":"游戏标题","rounds":[{"category":"...","label":"...","cap":"...","answer":"...","options":["...","...","...","..."]}]}',
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   return [

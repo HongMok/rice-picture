@@ -1,11 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import clsx from 'clsx';
 import { CHAT_MODELS, type ChatModelKey } from '~/libs/chat';
-import { AttachIcon, CloseIcon, GlobeIcon, SendIcon } from '~/components/ui/icons';
+import {
+  AttachIcon,
+  CloseIcon,
+  GlobeIcon,
+  SendIcon,
+  UsersIcon,
+} from '~/components/ui/icons';
 import { BrandmarkGlyph } from '~/components/login/Brandmark';
+
+interface ChildOption {
+  id: number;
+  nickname: string;
+  age: number | null;
+  diagnosis: string | null;
+}
 
 const MAX_LEN = 2000;
 const MAX_FILES = 5;
@@ -52,15 +65,48 @@ export function ChatPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState('');
   const [sessionId, setSessionId] = useState<number | null>(null);
+  const [children, setChildren] = useState<ChildOption[]>([]);
+  const [childId, setChildId] = useState<number | null>(null);
+  // childId 是否已被本会话锁定（首轮发送后 = true；此后不可改）
+  const [childLocked, setChildLocked] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 从 URL 读会话 id，加载历史消息回填
+  const selectedChild = useMemo(
+    () => children.find((c) => c.id === childId) || null,
+    [children, childId]
+  );
+
+  // 挂载时拉个案列表（默认不选任何一个）
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/children')
+      .then((r) => (r.ok ? r.json() : { children: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        setChildren(
+          (data.children || []).map((c: any) => ({
+            id: c.id,
+            nickname: c.nickname,
+            age: c.age,
+            diagnosis: c.diagnosis,
+          }))
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 从 URL 读会话 id，加载历史消息 + child_id 回填
   useEffect(() => {
     const idNum = urlSessionId ? Number(urlSessionId) : NaN;
     if (!Number.isFinite(idNum)) {
       setSessionId(null);
       setMessages([]);
+      setChildId(null);
+      setChildLocked(false);
       return;
     }
     let cancelled = false;
@@ -75,6 +121,8 @@ export function ChatPage() {
             (data.session.messages as { role: 'user' | 'assistant'; content: string }[])
               .map((m) => ({ id: genId(), role: m.role, content: m.content }))
           );
+          setChildId(data.session.child_id ?? null);
+          setChildLocked(true); // 已有会话 = child 已锁定
         } else {
           setError(data.error || '加载对话失败');
         }
@@ -157,7 +205,13 @@ export function ChatPage() {
         res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, model, sessionId }),
+          body: JSON.stringify({
+            messages: history,
+            model,
+            sessionId,
+            // 只在首轮传 childId；后端会锁定进 session，后续读回不看前端
+            childId: childLocked ? undefined : childId,
+          }),
           signal: controller.signal,
         });
       } finally {
@@ -176,6 +230,11 @@ export function ChatPage() {
       if (data.sessionId && data.sessionId !== sessionId) {
         setSessionId(data.sessionId);
         router.replace(`/app/chat?id=${data.sessionId}`, { scroll: false });
+      }
+      // 首轮成功后锁定 child（服务端权威值为准，本地已选的 childId 可能被服务端否决）
+      if (!childLocked) {
+        if (typeof data.childId === 'number') setChildId(data.childId);
+        setChildLocked(true);
       }
 
       // 通知侧栏刷新历史列表（拉真数据、替换掉乐观占位条目）
@@ -296,6 +355,14 @@ export function ChatPage() {
                   ))}
                 </select>
 
+                <ChildSelector
+                  items={children}
+                  selected={selectedChild}
+                  locked={childLocked}
+                  onSelect={(id) => setChildId(id)}
+                  onClear={() => setChildId(null)}
+                />
+
                 <button
                   onClick={() => setWebSearch((v) => !v)}
                   className={clsx(
@@ -339,6 +406,141 @@ export function ChatPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 个案上下文选择器：胶囊按钮 + 下拉菜单。默认不选、首轮发送后锁定。 */
+function ChildSelector({
+  items,
+  selected,
+  locked,
+  onSelect,
+  onClear,
+}: {
+  items: ChildOption[];
+  selected: ChildOption | null;
+  locked: boolean;
+  onSelect: (id: number) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const hasChildren = items.length > 0;
+  const label = selected
+    ? selected.nickname
+    : hasChildren
+    ? '选择个案'
+    : '无个案';
+
+  const pillCls = clsx(
+    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors duration-[250ms] ease-out',
+    selected
+      ? 'border-clay-deep/25 bg-sage-mist text-clay-deep'
+      : 'border-line bg-card text-ink-faint hover:bg-paper-deep hover:text-ink',
+    locked && 'cursor-default'
+  );
+
+  return (
+    <div ref={wrapRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => {
+          if (locked) return;
+          if (!hasChildren) {
+            window.location.href = '/app/cases';
+            return;
+          }
+          setOpen((v) => !v);
+        }}
+        className={pillCls}
+        title={
+          locked
+            ? '本次对话已锁定这个个案；想换请开新对话'
+            : selected
+            ? '点击切换或清除'
+            : '选择个案后 AI 会围绕这个孩子回答'
+        }
+      >
+        <UsersIcon width={13} height={13} />
+        <span className="max-w-[120px] truncate">{label}</span>
+        {selected && !locked && (
+          <span
+            role="button"
+            aria-label="清除个案"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+              setOpen(false);
+            }}
+            className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full text-clay-deep/60 hover:bg-white hover:text-clay-deep"
+          >
+            <CloseIcon width={11} height={11} />
+          </span>
+        )}
+        {locked && (
+          <span className="ml-0.5 text-[10px] text-ink-faint">已锁定</span>
+        )}
+      </button>
+
+      {open && hasChildren && (
+        <div
+          className="absolute bottom-full left-0 z-20 mb-2 w-[300px] overflow-hidden rounded-card border border-line bg-card shadow-lg animate-fade-in"
+          role="listbox"
+        >
+          <p className="border-b border-line px-3 py-1.5 text-[11px] font-medium tracking-[0.15em] text-ink-faint">
+            我的个案
+          </p>
+          <div className="max-h-[240px] overflow-y-auto">
+            {items.map((c) => {
+              const active = selected?.id === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(c.id);
+                    setOpen(false);
+                  }}
+                  className={clsx(
+                    'flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors',
+                    active ? 'bg-sage-mist' : 'hover:bg-paper-deep'
+                  )}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sage-mist text-sm font-medium text-sage-deep">
+                    {c.nickname.slice(0, 1)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-medium text-ink">
+                      {c.nickname}
+                    </p>
+                    <p className="truncate text-[11px] text-ink-faint">
+                      {[
+                        c.age != null ? `${c.age}岁` : null,
+                        c.diagnosis || null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || '无更多信息'}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,13 @@ export async function middleware(req: NextRequest) {
   const session = await verifySession(token);
 
   if (!session) {
+    // eslint-disable-next-line no-console
+    console.warn('[middleware] 未登录 -> /login', {
+      path: req.nextUrl.pathname,
+      hasToken: !!token,
+      tokenLen: token?.length,
+      hasSecret: !!process.env.SESSION_SECRET,
+    });
     const url = req.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('from', req.nextUrl.pathname);

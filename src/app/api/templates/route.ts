@@ -3,6 +3,7 @@ import { getCurrentUser } from '~/libs/auth';
 import { listTemplates } from '~/libs/templates';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   const user = await getCurrentUser();

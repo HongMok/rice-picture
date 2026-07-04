@@ -43,6 +43,12 @@ const config: Config = {
           deep: '#A65F44',
           mist: '#F5E5DC',
         },
+        // 危险 / 错误 / 警告：删除、报错、必填提示，低饱和不刺眼
+        danger: {
+          DEFAULT: '#C08585',
+          deep: '#A66E6E',
+          mist: '#F5E5E5',
+        },
       },
       borderRadius: {
         btn: '999px',

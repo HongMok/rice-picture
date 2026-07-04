@@ -15,116 +15,105 @@ const SIZE_MAP: Record<Size, { box: number; icon: number; wordCls: string; aiCls
   lg: { box: 48, icon: 30, wordCls: 'text-3xl', aiCls: 'text-xs', tagCls: 'text-xs', gap: 'gap-3.5', radius: 'rounded-[12px]' },
 };
 
-/** 卡通萌芽：黑描边 + 品牌绿填充 + 土色小堆。
- *  一大叶右上、一小叶左侧，错落有动势；叶柄从主茎斜伸出。 */
+/** 卡通萌芽豆子吉祥物：白肚子、绿描边、头顶两片叶、黑豆眼、粉腮红、脚下两撇。
+ *  取自 Mok 提供的萌芽卡通形象。 */
 /** 可复用的萌芽 Glyph（供 Brandmark 内部使用，也导出给对话空态等场景独立使用）。 */
 export function BrandmarkGlyph(props: { size: number; onDark?: boolean }) {
   return <SproutGlyph {...props} />;
 }
 
 function SproutGlyph({ size, onDark = false }: { size: number; onDark?: boolean }) {
-  // 卡通配色：绿叶填充 / 深色描边 / 土棕小堆
-  const leaf = '#7FA98B'; // clay (明亮绿)
-  const leafShade = '#5E8A6E'; // clay-deep (阴影)
-  const stroke = onDark ? '#2E3A31' : '#3E3A36'; // ink，深底上再压深一点
-  const soil = '#C9A57B'; // 温暖土棕
-  const soilStroke = '#8B6F4E';
-  const sw = 1.3; // 卡通描边
+  // 按原图 166×184 描出的 24×24 SVG（等比缩放 s≈0.1304, 水平居中偏移≈1.17）
+  // 配色：从原图取样
+  const green = '#3EA05A';                       // 主绿：描边/叶/圆环/土丘
+  const greenDeep = '#2C7A42';                   // 深绿：叶脉
+  const cream = '#F7E8C4';                       // 奶黄脸颊
+  const belly = onDark ? '#F5F1E8' : '#FCFAF3';  // 象牙白（略偏暖）
+  const eye = onDark ? '#242822' : '#2A2822';    // 眼睛/嘴
 
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* 土堆：底部小丘，浅弧线 */}
+      {/* ==== 底层：土丘/草坪 ==== */}
+      {/* 半圆椭圆状底座，宽度 4.7 → 20.7，顶 y=18.5，覆盖到 24 底 */}
       <path
-        d="M4.5 21.5 C 6 20, 9 19.4, 12 19.4 C 15 19.4, 18 20, 19.5 21.5 Z"
-        fill={soil}
-        stroke={soilStroke}
-        strokeWidth={sw}
-        strokeLinejoin="round"
+        d="M12 24
+           C 6.4 24, 3.3 22.4, 3.3 20.4
+           C 3.3 18.6, 6.6 18.5, 12 18.5
+           C 17.4 18.5, 20.7 18.6, 20.7 20.4
+           C 20.7 22.4, 17.6 24, 12 24 Z"
+        fill={green}
       />
 
-      {/* 主茎：从土里长出，微微向右倾（生长感）*/}
-      <path
-        d="M11.6 19.6 C 11.9 16, 12.2 12.5, 12.6 8.4"
-        stroke={stroke}
-        strokeWidth={sw + 0.3}
-        strokeLinecap="round"
-        fill="none"
-      />
+      {/* ==== 中层：绿色圆环身体（外圆填绿，然后再叠白肚） ==== */}
+      {/* 外圆：中心 (12, 15.9)，半径 7.6 */}
+      <circle cx="12" cy="15.9" r="7.6" fill={green} />
+      {/* 白肚：内圆稍小，露出~1.5 单位的绿边 */}
+      <circle cx="12" cy="15.9" r="6.05" fill={belly} />
 
-      {/* 小叶（左）：叶柄从主茎中段斜伸向左 */}
+      {/* ==== 面部 ==== */}
+      {/* 奶黄脸颊：两个椭圆（腮红位置对齐眼睛下方一点） */}
+      <ellipse cx="8.6" cy="16.7" rx="1.35" ry="0.9" fill={cream} />
+      <ellipse cx="15.4" cy="16.7" rx="1.35" ry="0.9" fill={cream} />
+
+      {/* 眼睛：两颗黑豆，位于面部上半，等高（跟原图对齐） */}
+      <ellipse cx="9.8" cy="15.0" rx="0.7" ry="1.0" fill={eye} />
+      <ellipse cx="14.2" cy="15.0" rx="0.7" ry="1.0" fill={eye} />
+
+      {/* 嘴：小上扬弧 */}
       <path
-        d="M11.9 15.2 C 10.4 15, 8.8 14.6, 7.4 13.6"
-        stroke={stroke}
-        strokeWidth={sw - 0.1}
-        strokeLinecap="round"
-        fill="none"
-      />
-      {/* 小叶片本体：水滴形，叶尖朝左 */}
-      <path
-        d="M7.4 13.6
-           C 5.4 13.2, 3.6 12.4, 3 10.8
-           C 2.8 10.2, 3.2 9.8, 4 9.9
-           C 5.6 10.1, 7.2 10.9, 8.6 12.2
-           C 9.2 12.8, 9 13.4, 8.2 13.6
-           C 7.9 13.68, 7.6 13.64, 7.4 13.6 Z"
-        fill={leaf}
-        stroke={stroke}
-        strokeWidth={sw}
-        strokeLinejoin="round"
-      />
-      {/* 小叶中脉 */}
-      <path
-        d="M4.4 10.8 C 5.6 11.3, 6.8 12, 8 12.6"
-        stroke={leafShade}
-        strokeWidth={sw - 0.4}
+        d="M11.2 16.3 C 11.55 16.75, 12.45 16.75, 12.8 16.3"
+        stroke={eye}
+        strokeWidth={0.7}
         strokeLinecap="round"
         fill="none"
       />
 
-      {/* 大叶（右上）：叶柄从主茎顶端斜伸向右上 */}
+      {/* ==== 顶层：双叶 + 短茎（严格按原图比例：叶尖 y≈0.4, 最宽处 y≈3.1, 抱合于 y≈6.3） ==== */}
+
+      {/* 左叶：叶尖朝左上，饱满水滴形。基点在中央茎 (12, 6.3) 附近 */}
       <path
-        d="M12.6 8.4 C 13.4 7.6, 14.4 6.8, 15.6 6.2"
-        stroke={stroke}
-        strokeWidth={sw - 0.1}
+        d="M11.4 6.6
+           C 11.0 5.0, 10.2 3.4, 8.8 2.2
+           C 7.4 1.0, 5.2 0.4, 3.6 1.4
+           C 2.2 2.3, 2.4 4.4, 4.0 5.5
+           C 5.8 6.8, 8.4 7.2, 10.6 7.0
+           C 11.2 6.95, 11.5 6.9, 11.4 6.6 Z"
+        fill={green}
+      />
+      {/* 左叶脉 */}
+      <path
+        d="M10.6 6.5 C 8.6 5.6, 6.6 4.4, 4.8 2.6"
+        stroke={greenDeep}
+        strokeWidth={0.5}
         strokeLinecap="round"
         fill="none"
       />
-      {/* 大叶片本体：饱满水滴，叶尖斜向右上、略微上翘 */}
+
+      {/* 右叶：镜像 */}
       <path
-        d="M15.6 6.2
-           C 17.8 5, 20 5, 21 6.4
-           C 21.8 7.6, 21.6 9.4, 20.4 11
-           C 19 12.8, 16.6 13.8, 14.2 13.4
-           C 12.8 13.2, 12.2 12.4, 12.6 11.2
-           C 13 10, 14 8.4, 15.6 6.2 Z"
-        fill={leaf}
-        stroke={stroke}
-        strokeWidth={sw}
-        strokeLinejoin="round"
+        d="M12.6 6.6
+           C 13.0 5.0, 13.8 3.4, 15.2 2.2
+           C 16.6 1.0, 18.8 0.4, 20.4 1.4
+           C 21.8 2.3, 21.6 4.4, 20.0 5.5
+           C 18.2 6.8, 15.6 7.2, 13.4 7.0
+           C 12.8 6.95, 12.5 6.9, 12.6 6.6 Z"
+        fill={green}
       />
-      {/* 大叶中脉：从叶柄一路穿到叶尖 */}
+      {/* 右叶脉 */}
       <path
-        d="M13.6 12
-           C 15.4 10.6, 17.2 9.2, 19.4 7.8"
-        stroke={leafShade}
-        strokeWidth={sw - 0.3}
+        d="M13.4 6.5 C 15.4 5.6, 17.4 4.4, 19.2 2.6"
+        stroke={greenDeep}
+        strokeWidth={0.5}
         strokeLinecap="round"
         fill="none"
       />
-      {/* 大叶侧脉：两笔小分叉，增加卡通细节 */}
+
+      {/* 短茎：从两叶抱合处向下衔接到身体顶部 */}
       <path
-        d="M15.6 10.6 C 16 11.2, 16.6 11.5, 17.2 11.6"
-        stroke={leafShade}
-        strokeWidth={sw - 0.5}
+        d="M12 6.9 L 12 8.4"
+        stroke={green}
+        strokeWidth={1.4}
         strokeLinecap="round"
-        fill="none"
-      />
-      <path
-        d="M17 8.6 C 17.6 9, 18.4 9.2, 19.2 9.2"
-        stroke={leafShade}
-        strokeWidth={sw - 0.5}
-        strokeLinecap="round"
-        fill="none"
       />
     </svg>
   );

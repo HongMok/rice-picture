@@ -126,3 +126,27 @@ export async function finishGame(params: {
     client.release();
   }
 }
+
+
+export async function renameGame(params: {
+  id: number;
+  userId: number;
+  title: string;
+}): Promise<void> {
+  await query(
+    `update games set title = $1, updated_at = now()
+      where id = $2 and user_id = $3 and deleted_at is null`,
+    [params.title, params.id, params.userId]
+  );
+}
+
+export async function softDeleteGame(params: {
+  id: number;
+  userId: number;
+}): Promise<void> {
+  await query(
+    `update games set deleted_at = now()
+      where id = $1 and user_id = $2 and deleted_at is null`,
+    [params.id, params.userId]
+  );
+}

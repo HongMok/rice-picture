@@ -13,6 +13,7 @@ import {
   MenuIcon,
   PlusIcon,
 } from '~/components/ui/icons';
+import { BrandmarkGlyph } from '~/components/login/Brandmark';
 
 export interface LibItem {
   id: number;
@@ -223,16 +224,11 @@ export function Sidebar({
   );
 }
 
-/* 小禾 Logo：主色底 + 白色嫩苗（茎/双叶/顶芽） */
+/* 小禾 Logo：柔角方形 + 萌芽豆子卡通吉祥物 */
 function Logo() {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-card bg-clay text-white">
-      <svg viewBox="0 0 24 24" width={20} height={20} fill="none">
-        <path d="M12 21V8.5" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" />
-        <path d="M12 14.5c-3 0-5-2-5-5.2 3 0 5 2 5 5.2Z" fill="currentColor" />
-        <path d="M12 11.5c3 0 5.2-2 5.2-5.2-3 0-5.2 2-5.2 5.2Z" fill="currentColor" fillOpacity="0.85" />
-        <circle cx="12" cy="5.5" r="1.6" fill="currentColor" />
-      </svg>
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-card border border-clay-deep/25 bg-sage-mist">
+      <BrandmarkGlyph size={22} />
     </span>
   );
 }

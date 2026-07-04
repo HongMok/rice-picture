@@ -12,24 +12,73 @@ export interface ImageSpec {
   label: string; // 检索键
   emotion?: string; // kind=emotion 时
   prompt: string; // 画面描述（不含风格后缀）
+  /** 首次 prompt 被内容审查拒稿时用的降级 prompt（如把 IP 形象改成
+   *  「一个小朋友手里拿着 XX 相关玩具」，规避视觉审查）。 */
+  fallbackPrompt?: string;
 }
 
 /** 轮询单个生图任务直到完成（服务端，节流友好）
  *  turbo 模型通常 5～15s 出图；上限收紧，避免一轮多张图超时。 */
-async function waitForImage(taskId: string, maxTries = 12): Promise<string | null> {
+interface WaitResult {
+  url: string | null;
+  status: 'SUCCEEDED' | 'FAILED' | 'TIMEOUT';
+  message?: string;
+}
+
+async function waitForImage(taskId: string, maxTries = 12): Promise<WaitResult> {
   for (let i = 0; i < maxTries; i++) {
     await new Promise((r) => setTimeout(r, 2000));
     const res = await queryImageTask(taskId);
-    if (res.status === 'SUCCEEDED') return res.imageUrl || null;
-    if (res.status === 'FAILED') return null;
+    if (res.status === 'SUCCEEDED') return { url: res.imageUrl || null, status: 'SUCCEEDED' };
+    if (res.status === 'FAILED') {
+      return { url: null, status: 'FAILED', message: res.message };
+    }
   }
-  return null;
+  return { url: null, status: 'TIMEOUT' };
 }
 
 /**
  * 解析一张图：先查图库，命中返回永久 URL；未命中则生图+转存+入库。
  * 失败返回 null（前端用 emoji 兜底）。
  */
+/** 单次生图 + 等待。成功返回 url；失败返回 null 并打日志。 */
+async function tryGenerate(
+  prompt: string,
+  spec: ImageSpec,
+  attempt: string,
+): Promise<string | null> {
+  let taskId: string;
+  try {
+    taskId = await createImageTask({
+      prompt: `${prompt}。${styleSuffix(STYLE_KEY)}`,
+      negativePrompt: COMMON_NEGATIVE,
+      size: '1024*1024',
+    });
+  } catch (err) {
+    console.warn('[game-images] createImageTask 失败', {
+      attempt,
+      kind: spec.kind,
+      label: spec.label,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+  const wait = await waitForImage(taskId);
+  if (!wait.url) {
+    console.warn('[game-images] 生图未成功', {
+      attempt,
+      kind: spec.kind,
+      label: spec.label,
+      taskId,
+      status: wait.status,
+      message: wait.message,
+      prompt: prompt.slice(0, 200),
+    });
+    return null;
+  }
+  return wait.url;
+}
+
 export async function resolveImage(
   userId: number,
   spec: ImageSpec
@@ -38,19 +87,18 @@ export async function resolveImage(
   const hit = await findAsset(userId, spec.kind, spec.label);
   if (hit) return hit.blob_url;
 
-  // 2) 生图
-  let taskId: string;
-  try {
-    taskId = await createImageTask({
-      prompt: `${spec.prompt}。${styleSuffix(STYLE_KEY)}`,
-      negativePrompt: COMMON_NEGATIVE,
-      size: '1024*1024',
+  // 2) 首次尝试
+  let tempUrl = await tryGenerate(spec.prompt, spec, 'primary');
+
+  // 3) 首试失败 + 提供了降级 prompt → 再试一次
+  if (!tempUrl && spec.fallbackPrompt) {
+    console.info('[game-images] 首试失败，走降级 prompt 重试', {
+      kind: spec.kind,
+      label: spec.label,
     });
-  } catch {
-    return null;
+    tempUrl = await tryGenerate(spec.fallbackPrompt, spec, 'fallback');
   }
 
-  const tempUrl = await waitForImage(taskId);
   if (!tempUrl) return null;
 
   // 3) 持久化 + 入库（Blob 优先，否则数据库 base64 兜底）

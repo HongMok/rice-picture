@@ -95,6 +95,9 @@ export function Spinner({ className }: { className?: string }) {
   );
 }
 
+export { ToastProvider, useToast } from './toast';
+export { DialogProvider, useConfirm, usePrompt } from './dialog';
+
 /* ---------------- Label ---------------- */
 export function FieldLabel({
   children,

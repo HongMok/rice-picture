@@ -193,14 +193,12 @@ export function WhackAMoleGame({
   }
 
   function tapTarget(id: number, e: React.MouseEvent<HTMLButtonElement>) {
-    let target: TargetItem | undefined;
-    setTargets((prev) => {
-      const t = prev.find((m) => m.id === id);
-      if (!t || t.hit) return prev;
-      target = t;
-      return prev.map((m) => (m.id === id ? { ...m, hit: true } : m));
-    });
-    if (!target) return;
+    // 关键：不要在 setTargets 回调里做 side-effect（StrictMode 会双调，
+    // 第二次 t.hit 已是 true 会 early-return，导致得分/命中计数丢失）。
+    // 直接从当前 targets 里找，再单独调用 setTargets 更新 hit。
+    const target = targets.find((m) => m.id === id);
+    if (!target || target.hit) return;
+    setTargets((prev) => prev.map((m) => (m.id === id ? { ...m, hit: true } : m)));
 
     setClicks((c) => c + 1);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();

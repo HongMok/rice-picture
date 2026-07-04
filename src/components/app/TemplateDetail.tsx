@@ -29,7 +29,7 @@ export function TemplateDetail({
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/templates/${id}`)
+    fetch(`/api/templates/${id}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => (d.template ? setData(d) : setData(null)))
       .catch(() => setData(null))

@@ -119,3 +119,60 @@ export async function writeStory(
     pages: pages.slice(0, opts.pageCount),
   };
 }
+
+// ============ 通用 chat 补全（培训测评 / 结构化管线复用） ============
+
+export interface QwenChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface QwenChatOptions {
+  model?: 'qwen-plus' | 'qwen-max';
+  temperature?: number;
+  responseFormat?: 'text' | 'json_object';
+  maxTokens?: number;
+}
+
+/** 通用 chat 补全（培训测评 / 结构化管线复用） */
+export async function qwenChat(
+  messages: QwenChatMessage[],
+  opts: QwenChatOptions = {}
+): Promise<string> {
+  const res = await fetch(`${BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: opts.model || MODEL,
+      messages,
+      temperature: opts.temperature ?? 0.7,
+      max_tokens: opts.maxTokens,
+      ...(opts.responseFormat === 'json_object'
+        ? { response_format: { type: 'json_object' } }
+        : {}),
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || data?.message || `Qwen 请求失败 (HTTP ${res.status})`);
+  }
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') throw new Error('模型未返回内容');
+  return content;
+}
+
+/** 让模型返回 JSON 对象；自动提取 fenced code + 解析 */
+export async function qwenChatJson<T = any>(
+  messages: QwenChatMessage[],
+  opts: Omit<QwenChatOptions, 'responseFormat'> = {}
+): Promise<T> {
+  const content = await qwenChat(messages, { ...opts, responseFormat: 'json_object' });
+  try {
+    return extractJson(content) as T;
+  } catch {
+    throw new Error('模型返回的不是有效 JSON');
+  }
+}

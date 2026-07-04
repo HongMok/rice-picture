@@ -8,8 +8,21 @@ import {
   type EmotionRound,
   type MatchRound,
 } from '~/data/game-types';
-import { spawnFloatText, spawnParticles, spawnComboBadge } from '~/components/app/games/effects';
-import { playCoin, playCombo, unlockAudio } from '~/components/app/games/reflex-sound';
+import {
+  spawnFloatText,
+  spawnParticles,
+  spawnComboBadge,
+  spawnCoinFly,
+  spawnConfetti,
+  spawnFireworks,
+} from '~/components/app/games/effects';
+import {
+  playCoin,
+  playCombo,
+  playCoinCollected,
+  playVictory,
+  unlockAudio,
+} from '~/components/app/games/reflex-sound';
 
 const PRAISE = ['太棒了！', '答对啦！', '真聪明！', '做得好！', '就是这个！'];
 const RETRY = ['没关系，再想一想～', '再看看图，你可以的', '慢慢来，再试一次'];
@@ -101,6 +114,8 @@ export function GamePlayer({
   const [done, setDone] = useState(false);
   const [totalPoints, setTotalPoints] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const coinHudRef = useRef<HTMLSpanElement>(null); // 顶部金币 chip：飞金币的目标
+  const finaleDoneRef = useRef(false); // 胜利动画只放一次
 
   const rounds = game.rounds;
   const total = rounds.length;
@@ -120,6 +135,21 @@ export function GamePlayer({
     if (!done && round) speak(readText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, done]);
+
+  // 胜利：撒彩带 + 礼花 + 胜利音，只播一次
+  useEffect(() => {
+    if (done && !finaleDoneRef.current) {
+      finaleDoneRef.current = true;
+      const host = containerRef.current;
+      spawnConfetti(host, 100);
+      // 三波礼花错开时间
+      spawnFireworks(host, 3);
+      setTimeout(() => spawnFireworks(host, 2), 600);
+      unlockAudio();
+      playVictory(true);
+    }
+    if (!done) finaleDoneRef.current = false; // 重玩时复位
+  }, [done]);
 
   if (done) {
     return (
@@ -188,22 +218,33 @@ export function GamePlayer({
       setFeedback({ kind: 'ok', msg });
       setStars((s) => s + 1);
       speak(msg);
-      flyStars();
 
       // 金币 / 连击 / 飘字 / 粒子
       const nextCombo = combo + 1;
       setCombo(nextCombo);
       const bonus = nextCombo >= 3 && nextCombo % 3 === 0 ? Math.floor(COIN_PER_CORRECT / 2) : 0;
       const gained = COIN_PER_CORRECT + bonus;
-      setCoins((c) => c + gained);
       unlockAudio();
       playCoin(true);
 
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
+      // 星星从被点击选项按钮的顶部中心飞出
+      flyStars(cx, rect.top);
       spawnFloatText(cx, cy, `+${gained} 🪙`, '#B88515');
       spawnParticles(cx, cy, 8);
+      // 金币飞向顶部计数器，抵达后累加数字 + 收集音 + 计数器脉冲
+      spawnCoinFly({
+        fromX: cx,
+        fromY: cy,
+        targetEl: coinHudRef.current,
+        count: Math.min(5, Math.ceil(gained / 3)),
+        onLanded: () => {
+          setCoins((c) => c + gained);
+          playCoinCollected(true);
+        },
+      });
       if (bonus > 0) {
         spawnComboBadge(containerRef.current, nextCombo);
         playCombo(true, nextCombo);
@@ -247,14 +288,25 @@ export function GamePlayer({
     }
   }
 
-  function flyStars() {
-    const host = containerRef.current;
-    if (!host) return;
-    const rect = host.getBoundingClientRect();
+  /** 三颗星从选项按钮顶部中心飞出、向上散开淡出 */
+  function flyStars(cx: number, topY: number) {
     for (let i = 0; i < 3; i++) {
       const s = document.createElement('div');
       s.textContent = '⭐';
-      s.style.cssText = `position:fixed;left:${rect.left + rect.width / 2 - 14 + (i - 1) * 24}px;top:${rect.top + 40}px;font-size:28px;pointer-events:none;z-index:60;animation:starfly .9s ease-out forwards;animation-delay:${i * 0.08}s;`;
+      // 三颗横向错开 24px，起点稍微在按钮顶边上方
+      const startX = cx + (i - 1) * 24;
+      const startY = topY - 4;
+      s.style.cssText = [
+        'position:fixed',
+        `left:${startX}px`,
+        `top:${startY}px`,
+        'transform:translate(-50%,-50%)',
+        'font-size:30px',
+        'pointer-events:none',
+        'z-index:60',
+        'animation:starfly .9s ease-out forwards',
+        `animation-delay:${i * 0.08}s`,
+      ].join(';');
       document.body.appendChild(s);
       setTimeout(() => s.remove(), 1000);
     }
@@ -267,7 +319,10 @@ export function GamePlayer({
     <div ref={containerRef} className="mx-auto max-w-lg animate-fade-in">
       {/* 顶栏：金币 + 连击 */}
       <div className="mb-3 flex items-center gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF6DE] px-3 py-1 text-sm font-medium text-[#B88515]">
+        <span
+          ref={coinHudRef}
+          className="inline-flex items-center gap-1 rounded-full bg-[#FFF6DE] px-3 py-1 text-sm font-medium text-[#B88515] transition-transform"
+        >
           🪙 {coins}
         </span>
         {combo >= 2 && (
@@ -374,7 +429,10 @@ export function GamePlayer({
           </p>
         )}
         {locked && (
-          <Button className="px-7" onClick={next}>
+          <Button
+            className="game-next-btn px-8 py-2.5 text-base shadow-[0_4px_0_#5E8A6E]"
+            onClick={next}
+          >
             {idx < total - 1 ? '下一个 →' : '完成 ✓'}
           </Button>
         )}

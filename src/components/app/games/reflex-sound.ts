@@ -72,6 +72,32 @@ export function playCombo(soundOn: boolean, comboLevel: number) {
   setTimeout(() => tone(base * 1.5, 140, 'square'), 70);
 }
 
+/** 金币抵达计数器：明亮清脆的短叮 */
+export function playCoinCollected(soundOn: boolean) {
+  if (!soundOn) return;
+  tone(2000, 80, 'sine');
+  setTimeout(() => tone(2600, 120, 'sine'), 40);
+}
+
+/** 胜利旋律：一段上行 5 音，带尾音，比 playFinish 更盛大 */
+export function playVictory(soundOn: boolean) {
+  if (!soundOn) return;
+  // C E G C E —— 三和弦上行 + 冲顶
+  const notes = [
+    { f: 523, d: 130, t: 0 }, // C5
+    { f: 659, d: 130, t: 100 }, // E5
+    { f: 784, d: 130, t: 200 }, // G5
+    { f: 1046, d: 220, t: 320 }, // C6
+    { f: 1318, d: 320, t: 520 }, // E6 长
+  ];
+  notes.forEach(({ f, d, t }) => setTimeout(() => tone(f, d, 'triangle'), t));
+  // 尾部铃铛
+  setTimeout(() => {
+    tone(1976, 140, 'sine');
+    setTimeout(() => tone(2637, 180, 'sine'), 100);
+  }, 780);
+}
+
 /** 首次用户手势时解锁 AudioContext（同 GamePlayer.tsx unlockTts 的思路） */
 export function unlockAudio() {
   const c = getCtx();

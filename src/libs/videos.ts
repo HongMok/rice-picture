@@ -96,3 +96,27 @@ export async function listChildAnalysesRecent(
     [childId, userId, limit]
   );
 }
+
+
+export async function renameAnalysis(params: {
+  id: number;
+  userId: number;
+  title: string;
+}): Promise<void> {
+  await query(
+    `update video_analyses set title = $1, updated_at = now()
+      where id = $2 and user_id = $3 and deleted_at is null`,
+    [params.title, params.id, params.userId]
+  );
+}
+
+export async function softDeleteAnalysis(params: {
+  id: number;
+  userId: number;
+}): Promise<void> {
+  await query(
+    `update video_analyses set deleted_at = now()
+      where id = $1 and user_id = $2 and deleted_at is null`,
+    [params.id, params.userId]
+  );
+}

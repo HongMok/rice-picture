@@ -13,6 +13,9 @@ export interface Child {
   weaknesses: string[];
   interests: string[];
   total_points: number;
+  // 列表页聚合计数，仅 listChildren 返回；单个 getChild 不带
+  video_count?: number;
+  game_count?: number;
 }
 
 export async function createChild(params: {
@@ -88,7 +91,15 @@ export async function updateChild(params: {
 
 export async function listChildren(userId: number, limit = 50): Promise<Child[]> {
   return query<Child>(
-    'select * from children where user_id = $1 order by created_at desc limit $2',
+    `select c.*,
+       (select count(*)::int from video_analyses v
+         where v.child_id = c.id and v.user_id = c.user_id and v.deleted_at is null) as video_count,
+       (select count(*)::int from games g
+         where g.child_id = c.id and g.user_id = c.user_id and g.deleted_at is null) as game_count
+     from children c
+     where c.user_id = $1
+     order by c.created_at desc
+     limit $2`,
     [userId, limit]
   );
 }
