@@ -23,7 +23,7 @@ export function ToolboxLanding() {
         我能为你做什么?
       </h1>
       <p className="mt-3 max-w-[60ch] text-[15px] leading-[2] text-ink-soft">
-        备课、做教具、写报告 —— 挑一个开始，帮你把重复的事变快。
+        写报告 · 做教具 · 备教案 —— 交给懂康复的小禾。
       </p>
 
       {navError && (
