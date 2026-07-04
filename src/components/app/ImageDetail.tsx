@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Spinner } from '~/components/ui';
 import { ChevronLeftIcon, DownloadIcon, ImageIcon } from '~/components/ui/icons';
+import { styleName } from '~/data/taxonomy';
 
 interface Props {
   id: number;
@@ -164,7 +165,14 @@ export function ImageDetail({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-faint">
           {templateId && (
             <span>
-              模板：<span className="text-ink-soft">{templateId}</span>
+              风格：
+              <span className="text-ink-soft">
+                {(() => {
+                  const c = templateId.indexOf(':');
+                  const key = c >= 0 ? templateId.slice(c + 1) : templateId;
+                  return styleName(key);
+                })()}
+              </span>
             </span>
           )}
           <span>

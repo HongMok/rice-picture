@@ -2,7 +2,7 @@
 
 import clsx from 'clsx';
 import { useEffect, useMemo, useState } from 'react';
-import { TOPICS, STYLES } from '~/data/taxonomy';
+import { TOPICS, STYLES, styleName, topicName } from '~/data/taxonomy';
 import { BookIcon, ImageIcon } from '~/components/ui/icons';
 import { TemplateDetail } from '~/components/app/TemplateDetail';
 
@@ -16,6 +16,24 @@ export interface TemplateItem {
   brief: string;
   options: Record<string, any> | null;
   coverUrl: string | null;
+}
+
+/**
+ * 「做同款」时把模板的结构化字段拼成多行、可编辑的用户 prompt。
+ * 每行一个维度；控制在 4~5 行、约 100 字以内，避免撑爆输入框。
+ */
+export function formatTemplateBrief(t: TemplateItem): string {
+  const lines: string[] = [];
+  lines.push(`主题：${t.title}`);
+  lines.push(`分类：${topicName(t.topic)}`);
+  lines.push(`画风：${styleName(t.styleKey)}`);
+  if (t.kind === 'book' && t.options?.pageCount) {
+    lines.push(`页数：${t.options.pageCount} 页`);
+  }
+  if (t.brief) {
+    lines.push(`描述：${t.brief}`);
+  }
+  return lines.join('\n');
 }
 
 type Tab = 'type' | 'style';
@@ -59,7 +77,7 @@ export function TemplateGallery({
         <p className="text-sm font-medium text-ink">
           {kind === 'book' ? '绘本模板' : '图片模板'}
         </p>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-5">
           <SegTab active={tab === 'type'} onClick={() => setTab('type')}>
             类型
           </SegTab>
@@ -210,8 +228,10 @@ function SegTab({
     <button
       onClick={onClick}
       className={clsx(
-        'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-        active ? 'bg-ink text-white' : 'text-ink-soft hover:bg-paper'
+        'relative px-1 pb-2 pt-1 text-sm font-medium transition-colors',
+        active
+          ? 'text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:rounded-full after:bg-sage-deep'
+          : 'text-ink-faint hover:text-ink'
       )}
     >
       {children}

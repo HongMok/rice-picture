@@ -36,7 +36,12 @@ function childProfile(child: Child | null): string {
   return parts.join('；');
 }
 
-function buildMessages(gameType: GameType, child: Child | null, roundCount: number) {
+function buildMessages(
+  gameType: GameType,
+  child: Child | null,
+  roundCount: number,
+  characterOverride?: string,
+) {
   const system = [
     '你是一位为特需儿童（自闭症谱系、发育迟缓等）设计康复训练题目的专家。',
     '出题原则：语言简单具体、正面、可预期，句子短，避免比喻和抽象词；',
@@ -48,7 +53,7 @@ function buildMessages(gameType: GameType, child: Child | null, roundCount: numb
 
   let task: string;
   if (gameType === 'emotion') {
-    const character = child?.interests?.[0]?.trim();
+    const character = (characterOverride || child?.interests?.[0] || '').trim();
     task = [
       `出 ${roundCount} 道「情绪识别」题。每题给一个生活情境句，让孩子判断句中人物的心情。`,
       character
@@ -92,7 +97,8 @@ export interface GeneratedGame {
 export async function generateGame(
   gameType: GameType,
   child: Child | null,
-  roundCount = 5
+  roundCount = 5,
+  characterOverride?: string,
 ): Promise<GeneratedGame> {
   const res = await fetch(`${BASE}/chat/completions`, {
     method: 'POST',
@@ -102,7 +108,7 @@ export async function generateGame(
     },
     body: JSON.stringify({
       model: MODEL,
-      messages: buildMessages(gameType, child, roundCount),
+      messages: buildMessages(gameType, child, roundCount, characterOverride),
       temperature: 0.8,
       response_format: { type: 'json_object' },
     }),

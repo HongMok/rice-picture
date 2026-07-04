@@ -110,6 +110,27 @@ export function VideoStudio() {
     [load]
   );
 
+  /* ---------- 支持 URL 参数 ?open=<id>：加载完成后直接进 report 或 analyzing ---------- */
+  const openedRef = useRef(false);
+  useEffect(() => {
+    if (openedRef.current) return;
+    if (loading) return;
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const openRaw = Number(params.get('open'));
+    if (!Number.isInteger(openRaw) || openRaw <= 0) return;
+    const target = history.find((a) => a.id === openRaw);
+    if (!target) return;
+    openedRef.current = true;
+    if (target.status === 'DONE' && target.report) {
+      setView({ kind: 'report', analysis: target });
+    } else if (target.status === 'ANALYZING') {
+      setView({ kind: 'analyzing', id: target.id, startedAt: Date.now() });
+      poll(target.id);
+    }
+    // FAILED 就留在 list 视图；用户能在列表看到失败标记
+  }, [loading, history, poll]);
+
   /* ---------- 后台轻量轮询：不打开分析视图也能自动刷新列表里 ANALYZING 记录的状态 ---------- */
   const bgTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
@@ -1400,15 +1421,38 @@ function ScoreRow({ dim, accent }: { dim: DimensionScore; accent: 'clay' | 'sage
   const peer = dim.peer ?? 4;
   const peerPct = (Math.min(Math.max(peer, 0), 5) / 5) * 100;
   const gap = dim.score - peer;
-  const gapLabel = gap >= 1 ? '优于同龄' : gap <= -1 ? '低于同龄' : '接近同龄';
+  // 三档同龄对比，色相各异（clay 品牌改名后=绿，仅靠深浅无法区分，低于同龄改用琥珀）
+  const gapState: 'above' | 'below' | 'equal' =
+    gap >= 1 ? 'above' : gap <= -1 ? 'below' : 'equal';
+  const gapLabel =
+    gapState === 'above' ? '优于同龄' : gapState === 'below' ? '低于同龄' : '接近同龄';
   const gapCls =
-    gap >= 1 ? 'bg-sage-mist text-sage-deep' : gap <= -1 ? 'bg-clay-mist text-clay' : 'bg-paper text-ink-faint';
+    gapState === 'above'
+      ? 'bg-sage-mist text-sage-deep border-sage/30'
+      : gapState === 'equal'
+      ? 'bg-paper text-ink-faint border-line'
+      : '';
+  const gapStyle =
+    gapState === 'below'
+      ? {
+          backgroundColor: AMBER.mist,
+          color: AMBER.deep,
+          borderColor: AMBER.border,
+        }
+      : undefined;
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-sm font-medium text-ink">{dim.name}</span>
         <span className="flex items-center gap-2">
-          <span className={'rounded-full px-1.5 py-0.5 text-[10px] font-medium ' + gapCls}>{gapLabel}</span>
+          <span
+            className={
+              'rounded-full border px-1.5 py-0.5 text-[10px] font-medium ' + gapCls
+            }
+            style={gapStyle}
+          >
+            {gapLabel}
+          </span>
           <span className="text-xs font-medium text-clay">{dim.score}/5</span>
         </span>
       </div>
@@ -1570,7 +1614,7 @@ function TrendChart({ history, dims }: { history: HistoryPoint[]; dims: string[]
 /* ---------------- 老师评分卡（评分 + 总评 + 多个片段） ---------------- */
 function TeacherScoreCard({ dim }: { dim: TeacherDimension }) {
   const segs = dim.segments || [];
-  // 该维度整体基调：有问题片段 → 待改进（陶橙）；只有亮点 → 做得好（鼠尾草绿）；都没有 → 中性
+  // 该维度整体基调：有问题片段 → 待改进（琥珀）；只有亮点 → 做得好（鼠尾草绿）；都没有 → 中性
   const hasProblem = segs.some((s) => s.type === 'problem');
   const hasHighlight = segs.some((s) => s.type === 'highlight');
   const tone: 'problem' | 'highlight' | 'neutral' = hasProblem
@@ -1579,36 +1623,51 @@ function TeacherScoreCard({ dim }: { dim: TeacherDimension }) {
     ? 'highlight'
     : 'neutral';
 
+  // 问题态用琥珀内联样式，与 sage 绿色明确区分（clay 已改名为绿色，无法作为对比色）
+  const wrapStyle =
+    tone === 'problem'
+      ? { borderColor: AMBER.border, backgroundColor: AMBER.mist + '80' }
+      : undefined;
   const wrapCls =
     tone === 'problem'
-      ? 'border-clay/40 bg-clay-mist/40'
+      ? 'rounded-card border p-4'
       : tone === 'highlight'
-      ? 'border-sage/40 bg-sage-mist/30'
-      : 'border-line bg-paper/30';
+      ? 'rounded-card border border-sage/40 bg-sage-mist/30 p-4'
+      : 'rounded-card border border-line bg-paper/30 p-4';
+  const scoreStyle = tone === 'problem' ? { color: AMBER.deep } : undefined;
   const scoreCls =
-    tone === 'problem' ? 'text-clay' : tone === 'highlight' ? 'text-sage-deep' : 'text-ink-soft';
-  const badgeCls =
     tone === 'problem'
-      ? 'bg-clay text-white'
+      ? 'text-xs font-medium'
       : tone === 'highlight'
+      ? 'text-xs font-medium text-sage-deep'
+      : 'text-xs font-medium text-ink-soft';
+  const badgeCls =
+    tone === 'highlight'
       ? 'bg-sage text-white'
-      : 'bg-line/60 text-ink-soft';
+      : tone === 'neutral'
+      ? 'bg-line/60 text-ink-soft'
+      : '';
+  const badgeStyle =
+    tone === 'problem' ? { backgroundColor: AMBER.solid, color: '#fff' } : undefined;
   const badgeLabel = tone === 'problem' ? '有待改进' : tone === 'highlight' ? '做得好' : '中性';
 
   return (
-    <div className={'rounded-card border p-4 ' + wrapCls}>
+    <div className={wrapCls} style={wrapStyle}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-ink">{dim.name}</span>
           {tone !== 'neutral' && (
-            <span className={'rounded-full px-2 py-0.5 text-[10px] font-medium ' + badgeCls}>
+            <span
+              className={'rounded-full px-2 py-0.5 text-[10px] font-medium ' + badgeCls}
+              style={badgeStyle}
+            >
               {badgeLabel}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
           <StarRow score={dim.score} tone={tone} />
-          <span className={'text-xs font-medium ' + scoreCls}>{dim.score}/5</span>
+          <span className={scoreCls} style={scoreStyle}>{dim.score}/5</span>
         </div>
       </div>
 
@@ -1636,7 +1695,12 @@ function TeacherSegmentRow({ seg }: { seg: TeacherSegment }) {
     <div
       className={
         'rounded-lg border p-3 ' +
-        (problem ? 'border-clay/40 bg-clay-mist/60' : 'border-sage/30 bg-sage-mist/25')
+        (problem ? '' : 'border-sage/30 bg-sage-mist/25')
+      }
+      style={
+        problem
+          ? { borderColor: AMBER.border, backgroundColor: AMBER.mist + 'CC' }
+          : undefined
       }
     >
       <div className="mb-1.5 flex items-center gap-2">
@@ -1644,19 +1708,30 @@ function TeacherSegmentRow({ seg }: { seg: TeacherSegment }) {
         <span
           className={
             'rounded-full px-2 py-0.5 text-[10px] font-medium ' +
-            (problem ? 'bg-clay text-white' : 'bg-sage text-white')
+            (problem ? '' : 'bg-sage text-white')
           }
+          style={problem ? { backgroundColor: AMBER.solid, color: '#fff' } : undefined}
         >
           {problem ? '待改进' : '亮点'}
         </span>
       </div>
       <p className="text-xs leading-relaxed text-ink">
-        <span className={'font-medium ' + (problem ? 'text-clay' : 'text-sage-deep')}>{obsLabel}：</span>
+        <span
+          className={'font-medium ' + (problem ? '' : 'text-sage-deep')}
+          style={problem ? { color: AMBER.deep } : undefined}
+        >
+          {obsLabel}：
+        </span>
         {seg.observation}
       </p>
       {seg.demo && (
         <p className="mt-1 flex gap-1 text-xs leading-relaxed text-ink">
-          <span className="font-medium text-clay">{demoLabel}：</span>
+          <span
+            className={'font-medium ' + (problem ? '' : 'text-sage-deep')}
+            style={problem ? { color: AMBER.deep } : undefined}
+          >
+            {demoLabel}：
+          </span>
           <span>{seg.demo}</span>
         </p>
       )}
@@ -1672,14 +1747,22 @@ function StarRow({
   tone?: 'problem' | 'highlight' | 'neutral';
 }) {
   const onCls =
-    tone === 'problem' ? 'text-clay' : tone === 'highlight' ? 'text-sage-deep' : 'text-ink-soft';
+    tone === 'highlight' ? 'text-sage-deep' : tone === 'neutral' ? 'text-ink-soft' : '';
+  const onStyle = tone === 'problem' ? { color: AMBER.solid } : undefined;
   return (
     <span className="text-sm tracking-tight">
-      {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < score ? onCls : 'text-line'}>
-          ★
-        </span>
-      ))}
+      {Array.from({ length: 5 }, (_, i) => {
+        const on = i < score;
+        return (
+          <span
+            key={i}
+            className={on ? onCls : 'text-line'}
+            style={on ? onStyle : undefined}
+          >
+            ★
+          </span>
+        );
+      })}
     </span>
   );
 }

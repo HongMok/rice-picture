@@ -13,6 +13,7 @@ import {
   WorksIcon,
 } from '~/components/ui/icons';
 import { exportBookPdf } from '~/libs/book-pdf';
+import { styleName } from '~/data/taxonomy';
 
 /* ---------------- 类型 ---------------- */
 
@@ -434,6 +435,7 @@ function Card({
   const canDownload = item.type === 'image' || item.type === 'book';
   const updated = formatTime(item.updatedAt);
   const Icon = meta.icon;
+  const subtitleText = formatSubtitle(item);
 
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-section border border-line bg-card transition-colors duration-[250ms] hover:border-clay/40">
@@ -506,9 +508,9 @@ function Card({
           </button>
         )}
         <p className="truncate text-[12px] text-ink-faint">
-          {item.subtitle ? (
+          {subtitleText ? (
             <>
-              <span>{item.subtitle}</span>
+              <span>{subtitleText}</span>
               <span className="mx-1.5 opacity-60">·</span>
             </>
           ) : null}
@@ -685,6 +687,26 @@ function ConfirmDialog({
 }
 
 /* ---------------- 时间格式化 ---------------- */
+
+// 把 API 返回的原始 subtitle（英文 key 或未加工文本）转成中文副标题
+function formatSubtitle(item: LibraryItem): string {
+  const raw = item.subtitle;
+  if (!raw) return '';
+  if (item.type === 'image') {
+    // 形如 "image:warm" / "image:line"，冒号后是 STYLES 里的 key
+    const colon = raw.indexOf(':');
+    const key = colon >= 0 ? raw.slice(colon + 1) : raw;
+    const cn = styleName(key);
+    return `${cn}图卡`;
+  }
+  if (item.type === 'lesson-plan') {
+    // 目前 lesson_plans.type 唯一值就是 'ABA-DTT'
+    if (raw === 'ABA-DTT') return 'DTT 教案';
+    return raw;
+  }
+  // book: '共 N 页'，保持
+  return raw;
+}
 
 function formatTime(iso: string): string {
   const d = new Date(iso);

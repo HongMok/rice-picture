@@ -93,6 +93,27 @@ export async function updateWorkTitle(
   );
 }
 
+/**
+ * 重置一张失败图卡：清空 output_url、写入新 taskId，状态回到 PENDING。
+ * 保留原 input_text / prompt / template_id，供轮询和后续追溯。
+ */
+export async function resetWorkForRetry(params: {
+  workId: number;
+  userId: number;
+  taskId: string;
+}): Promise<Work | null> {
+  return queryOne<Work>(
+    `update works
+        set status = 'PENDING',
+            task_id = $1,
+            output_url = null,
+            updated_at = now()
+      where id = $2 and user_id = $3 and deleted_at is null
+      returning *`,
+    [params.taskId, params.workId, params.userId]
+  );
+}
+
 export async function softDeleteWork(
   id: number,
   userId: number

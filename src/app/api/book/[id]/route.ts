@@ -109,6 +109,7 @@ export async function GET(
       brief: book.brief,
       status: book.status,
       pageCount: book.page_count,
+      options: book.options || {},
     },
     doneCount,
     pages: pages.map((p) => ({

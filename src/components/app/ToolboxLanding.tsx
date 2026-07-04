@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { TOOLS } from '~/data/tools';
+import { TOOLS, type ToolBadge } from '~/data/tools';
 
 export function ToolboxLanding() {
   const router = useRouter();
@@ -23,7 +23,7 @@ export function ToolboxLanding() {
         我能为你做什么?
       </h1>
       <p className="mt-3 max-w-[60ch] text-[15px] leading-[2] text-ink-soft">
-        挑一个工具开始，或者从对话里慢慢说清楚你的需求。
+        备课、做教具、写报告 —— 挑一个开始，帮你把重复的事变快。
       </p>
 
       {navError && (
@@ -49,8 +49,9 @@ export function ToolboxLanding() {
                 e.preventDefault();
                 handleNavigate(tool.href);
               }}
-              className="group min-w-[240px] rounded-card border border-line bg-card p-8 transition-colors duration-[450ms] ease-out hover:bg-paper-deep"
+              className="group relative min-w-[240px] overflow-hidden rounded-card border border-line bg-card p-8 transition-colors duration-[450ms] ease-out hover:bg-paper-deep"
             >
+              {tool.badge && <CornerRibbon type={tool.badge} />}
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-sage-mist text-sage-deep">
                 <Icon width={22} height={22} />
               </span>
@@ -63,5 +64,22 @@ export function ToolboxLanding() {
         })}
       </div>
     </div>
+  );
+}
+
+/** 卡片右上角 45° 对角丝带。父容器需要 relative + overflow-hidden。 */
+function CornerRibbon({ type }: { type: ToolBadge }) {
+  // AI = 青灰（water）；HOT = 陶土橘（ember）
+  const bg = type === 'AI' ? 'bg-water' : 'bg-ember';
+  return (
+    <span
+      className={
+        'pointer-events-none absolute -right-9 top-3 w-32 rotate-45 py-1 text-center text-[10px] font-semibold tracking-[0.22em] text-paper shadow-sm ' +
+        bg
+      }
+      aria-hidden
+    >
+      {type}
+    </span>
   );
 }

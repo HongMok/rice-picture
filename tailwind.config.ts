@@ -37,6 +37,12 @@ const config: Config = {
           deep: '#5E8A6E',
           mist: '#E8F1E9',
         },
+        // 陶土暖色：Japandi 里少量点缀（HOT/新品等语义色），保持低饱和
+        ember: {
+          DEFAULT: '#C97A5B',
+          deep: '#A65F44',
+          mist: '#F5E5DC',
+        },
       },
       borderRadius: {
         btn: '999px',

@@ -9,6 +9,7 @@ import {
   setPageTask,
   setBookStatus,
 } from '~/libs/books';
+import { getTemplate } from '~/libs/templates';
 import {
   styleSuffix,
   COMMON_NEGATIVE,
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
     options?: Record<string, string>;
     pageCount?: number;
     ratio?: string;
+    templateId?: number | null;
   };
   try {
     body = await req.json();
@@ -46,6 +48,13 @@ export async function POST(req: Request) {
   const opts = body.options || {};
   const styleKey = (opts.styleKey as string) || 'watercolor';
 
+  // 若「做同款」带了 templateId，取该模板的专家 system_prompt
+  let systemPrompt = '';
+  if (body.templateId) {
+    const t = await getTemplate(Number(body.templateId));
+    if (t?.system_prompt) systemPrompt = t.system_prompt.trim();
+  }
+
   // 1) 建 book 记录
   const book = await createBook({
     userId: user.id,
@@ -63,6 +72,7 @@ export async function POST(req: Request) {
       character: opts.character,
       perspective: opts.perspective,
       pageCount,
+      directive: systemPrompt || undefined,
     });
 
     await setBookStory({
@@ -78,8 +88,11 @@ export async function POST(req: Request) {
     const size = sizeForRatio(ratio);
     for (const p of pages) {
       try {
+        const pagePrompt = [p.scene, systemPrompt, styleSuffix(styleKey)]
+          .filter(Boolean)
+          .join('。');
         const taskId = await createImageTask({
-          prompt: `${p.scene}。${styleSuffix(styleKey)}`,
+          prompt: pagePrompt,
           negativePrompt: COMMON_NEGATIVE,
           size,
         });

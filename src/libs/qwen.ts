@@ -15,6 +15,7 @@ export interface StoryOptions {
   character?: string; // 角色
   perspective?: string; // 叙事视角
   pageCount: number; // 页数
+  directive?: string; // 「做同款」时来自模板 system_prompt 的额外创作指令
 }
 
 export interface StoryPage {
@@ -41,6 +42,7 @@ function buildMessages(brief: string, opts: StoryOptions) {
     opts.theme && `核心主题：${opts.theme}。`,
     opts.character && `主要角色设定：${opts.character}。`,
     opts.perspective && `叙事视角：${opts.perspective}。`,
+    opts.directive && `补充创作要求（来自模板）：${opts.directive}`,
     '每页包含两个字段：',
     '- text：该页故事正文，1~2 句简短中文，面向孩子朗读；',
     '- scene：该页对应的画面描述，用于 AI 绘画，描述清楚人物、动作、场景、情绪，画面里不要出现任何文字。',

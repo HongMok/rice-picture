@@ -89,189 +89,126 @@ export function GameCursor({
 }
 
 /* ============================================================
- * 玩具锤：斜握角度的粉红双头槌 + 圆柄，头上带白色心形高光
- * 全部走 viewBox 100x100，配合 anchor.x=0.3 / anchor.y=0.28 让锤面对准命中点
+ * 玩具锤：Japandi 陶土色调（ember），温柔卡通，非饱和粉红
  * ============================================================ */
 function HammerSvg() {
   return (
     <svg viewBox="0 0 100 100" width="100%" height="100%" fill="none">
       {/* 木柄：从锤头背面伸向右下 */}
       <g transform="rotate(28 30 28)">
-        {/* 柄阴影 */}
-        <rect x="26" y="30" width="10" height="72" rx="5" fill="#B67540" />
-        {/* 柄主体 */}
-        <rect x="26" y="30" width="10" height="72" rx="5" fill="#D89C5A" stroke="#5C3A1A" strokeWidth="3" strokeLinejoin="round" />
-        {/* 柄上高光 */}
-        <rect x="28" y="34" width="3" height="60" rx="1.5" fill="#F2C58A" opacity="0.8" />
-        {/* 握把末端小珠 */}
-        <circle cx="31" cy="102" r="7" fill="#D89C5A" stroke="#5C3A1A" strokeWidth="3" />
-        <circle cx="29" cy="100" r="2" fill="#F2C58A" opacity="0.9" />
+        <rect
+          x="26"
+          y="30"
+          width="10"
+          height="72"
+          rx="5"
+          fill="#D6C4A6"
+          stroke="#7A6A54"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <rect x="28" y="34" width="2.5" height="58" rx="1.2" fill="#EAD9B9" opacity="0.85" />
+        <circle cx="31" cy="102" r="7" fill="#D6C4A6" stroke="#7A6A54" strokeWidth="2" />
       </g>
 
-      {/* 锤头主体（横向胶囊 / 圆头双端） */}
+      {/* 锤头：陶土色（ember 家族） */}
       <g>
-        {/* 锤头底影 */}
-        <ellipse cx="30" cy="34" rx="26" ry="16" fill="#C63C6E" />
-        {/* 锤头本体 */}
         <rect
           x="4"
           y="14"
           width="52"
           height="30"
-          rx="15"
-          fill="#F35C89"
-          stroke="#8A2149"
-          strokeWidth="3.5"
+          rx="14"
+          fill="#C97A5B"
+          stroke="#7A4A32"
+          strokeWidth="2.5"
           strokeLinejoin="round"
         />
-        {/* 左右两端的“环带” */}
+        {/* 端部环带 */}
+        <path d="M15 18 Q12 29 15 40" stroke="#7A4A32" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+        <path d="M45 18 Q48 29 45 40" stroke="#7A4A32" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+        {/* 高光 */}
         <path
-          d="M14 18 Q11 29 14 40"
-          stroke="#8A2149"
-          strokeWidth="3"
-          strokeLinecap="round"
-          fill="none"
-        />
-        <path
-          d="M46 18 Q49 29 46 40"
-          stroke="#8A2149"
-          strokeWidth="3"
-          strokeLinecap="round"
-          fill="none"
-        />
-        {/* 环带内侧金属带 */}
-        <rect x="10" y="18" width="4" height="22" rx="1.5" fill="#FBBACC" opacity="0.85" />
-        <rect x="46" y="18" width="4" height="22" rx="1.5" fill="#C63C6E" opacity="0.4" />
-
-        {/* 顶部高光：一条弧线 + 心形亮点 */}
-        <path
-          d="M14 22 Q22 16 34 17"
-          stroke="#FFFFFF"
-          strokeWidth="3"
+          d="M12 22 Q22 16 34 17"
+          stroke="#FAF7F2"
+          strokeWidth="2.5"
           strokeLinecap="round"
           fill="none"
           opacity="0.9"
         />
-        {/* 心形高光：两小圆 + 三角 */}
-        <g fill="#FFFFFF" opacity="0.95">
-          <circle cx="22" cy="25" r="2.4" />
-          <circle cx="27" cy="25" r="2.4" />
-          <path d="M20 26.5 L29 26.5 L24.5 32 Z" />
-        </g>
+        <ellipse cx="24" cy="26" rx="6" ry="3.2" fill="#F5D2BE" opacity="0.7" />
       </g>
     </svg>
   );
 }
 
 /* ============================================================
- * 卡通捕虫网：金色圆环 + 半透明浅绿网面（径向 + 环向网格）+ 弯木柄
- * anchor.x=0.42 / anchor.y=0.4 使网口中心对准命中点
+ * 捕虫网：Japandi sage 色系网面 + 米白木柄圈 + 温柔描边
  * ============================================================ */
 function NetSvg() {
   return (
     <svg viewBox="0 0 100 100" width="100%" height="100%" fill="none">
       <defs>
         <radialGradient id="netMesh" cx="50%" cy="45%" r="55%">
-          <stop offset="0%" stopColor="#F4FBEF" stopOpacity="0.9" />
-          <stop offset="70%" stopColor="#BFE1C5" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#7FB894" stopOpacity="0.55" />
+          <stop offset="0%" stopColor="#FAF7F2" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#B4CBB1" stopOpacity="0.65" />
         </radialGradient>
-        <linearGradient id="ringMetal" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#F6D97A" />
-          <stop offset="50%" stopColor="#E4A93A" />
-          <stop offset="100%" stopColor="#A56E17" />
-        </linearGradient>
-        <linearGradient id="handleWood" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#B67540" />
-          <stop offset="50%" stopColor="#D89C5A" />
-          <stop offset="100%" stopColor="#B67540" />
-        </linearGradient>
       </defs>
 
-      {/* 木柄：从网口右下弧线延伸到右下角 */}
+      {/* 木柄 */}
       <path
         d="M60 55 Q78 68 92 92"
-        stroke="url(#handleWood)"
-        strokeWidth="10"
+        stroke="#D6C4A6"
+        strokeWidth="9"
         strokeLinecap="round"
         fill="none"
       />
       <path
         d="M60 55 Q78 68 92 92"
-        stroke="#5C3A1A"
-        strokeWidth="3"
+        stroke="#7A6A54"
+        strokeWidth="2.5"
         strokeLinecap="round"
         fill="none"
-        opacity="0.65"
       />
-      {/* 柄末小把手（防握滑） */}
-      <circle cx="92" cy="92" r="7.5" fill="#D89C5A" stroke="#5C3A1A" strokeWidth="3" />
-      <circle cx="90" cy="90" r="2" fill="#F2C58A" opacity="0.9" />
+      <circle cx="92" cy="92" r="6.5" fill="#D6C4A6" stroke="#7A6A54" strokeWidth="2" />
 
-      {/* 网口与柄之间的固定环 */}
+      {/* 固定环 */}
       <ellipse
         cx="60"
         cy="53"
-        rx="8"
-        ry="6"
+        rx="7"
+        ry="5"
         transform="rotate(30 60 53)"
-        fill="#8A6634"
-        stroke="#5C3A1A"
-        strokeWidth="2.5"
+        fill="#C7B48A"
+        stroke="#7A6A54"
+        strokeWidth="2"
       />
 
-      {/* 网袋主体（比网口略窄的椭圆，代表纵深） */}
-      <ellipse cx="42" cy="42" rx="30" ry="28" fill="url(#netMesh)" />
+      {/* 网袋 */}
+      <ellipse cx="42" cy="42" rx="28" ry="26" fill="url(#netMesh)" />
 
-      {/* 网格：径向 8 根 + 环向 3 圈 */}
-      <g stroke="#3E5A44" strokeWidth="1.3" fill="none" opacity="0.55" strokeLinecap="round">
-        <line x1="42" y1="14" x2="42" y2="70" />
-        <line x1="12" y1="42" x2="72" y2="42" />
+      {/* 网格 */}
+      <g stroke="#5E8A6E" strokeWidth="1.2" fill="none" opacity="0.5" strokeLinecap="round">
+        <line x1="42" y1="16" x2="42" y2="68" />
+        <line x1="14" y1="42" x2="70" y2="42" />
         <line x1="22" y1="22" x2="62" y2="62" />
         <line x1="22" y1="62" x2="62" y2="22" />
-        <line x1="16" y1="30" x2="68" y2="54" />
-        <line x1="16" y1="54" x2="68" y2="30" />
-        <ellipse cx="42" cy="42" rx="22" ry="20.5" />
-        <ellipse cx="42" cy="42" rx="14" ry="13" />
-        <ellipse cx="42" cy="42" rx="6" ry="5.5" />
+        <ellipse cx="42" cy="42" rx="20" ry="19" />
+        <ellipse cx="42" cy="42" rx="10" ry="9" />
       </g>
 
-      {/* 金属圆环（网口）—— 用金色渐变 + 深色描边表现立体 */}
-      <ellipse
-        cx="42"
-        cy="42"
-        rx="30"
-        ry="28"
-        fill="none"
-        stroke="url(#ringMetal)"
-        strokeWidth="6"
-      />
-      <ellipse
-        cx="42"
-        cy="42"
-        rx="30"
-        ry="28"
-        fill="none"
-        stroke="#7A4C0A"
-        strokeWidth="2"
-      />
+      {/* 金属圈 */}
+      <ellipse cx="42" cy="42" rx="28" ry="26" fill="none" stroke="#8FA98F" strokeWidth="4" />
+      <ellipse cx="42" cy="42" rx="28" ry="26" fill="none" stroke="#3E3A36" strokeWidth="1.6" />
 
-      {/* 网口高光 */}
+      {/* 高光 */}
       <path
-        d="M20 30 Q28 18 46 15"
-        stroke="#FFFFFF"
-        strokeWidth="3"
+        d="M20 30 Q28 18 46 16"
+        stroke="#FAF7F2"
+        strokeWidth="2.5"
         strokeLinecap="round"
         fill="none"
-        opacity="0.95"
-      />
-      <path
-        d="M62 28 Q66 34 66 40"
-        stroke="#FFFFFF"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.5"
+        opacity="0.9"
       />
     </svg>
   );

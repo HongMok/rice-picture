@@ -10,12 +10,11 @@
 // [
 //   { "kind":"image", "topic":"language", "style":"flat",
 //     "title":"数字卡", "subtitle":"数字认知",
-//     "brief":"数字1到5", "scene":"数字1到5排成一排，色彩清晰" },
-//   { "kind":"book", "topic":"social", "style":"watercolor",
-//     "title":"学会道歉", "subtitle":"4页绘本",
-//     "brief":"小狐狸不小心弄坏朋友的东西，学会说对不起",
-//     "scene":"一只小狐狸对朋友道歉，温馨场景", "pageCount":4 }
+//     "brief":"数字1到5", "scene":"数字1到5排成一排，色彩清晰",
+//     "systemPrompt":"可选：模板级专家 prompt，做同款时追加" },
+//   ...
 // ]
+// systemPrompt 缺省时，自动用 (kind, topic) 分类的默认值（同 backfill 脚本）。
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -65,6 +64,31 @@ const STYLE = {
 const NEG = '文字，字母，水印，logo，霓虹色，高饱和，塑料感，3D渲染，恐怖，暴力，多余的手指，畸形';
 const VALID_TOPIC = ['language', 'social', 'selfcare', 'cognition'];
 const VALID_KIND = ['image', 'book'];
+
+// 默认 system_prompt 库（与 backfill-template-system-prompt.mjs 保持一致）
+const SP_COMMON =
+  '面向特需儿童教学使用；画面主体清晰居中，背景简洁纯净，颜色柔和不刺眼；情绪正向友好，角色表情容易辨识；画面不出现任何文字、字母、数字、水印、logo；不使用高饱和霓虹色、不出现暴力恐怖元素、不出现畸形肢体或多余手指。';
+const SP_TOPIC = {
+  language:
+    '主体是名词/动作对象，只出现一个主要物体或一个清晰动作；构图适合作为语言沟通图卡使用，便于命名和指认。',
+  social:
+    '场景包含清晰的社交动作与人物互动（如对视、微笑、分享、轮流、道歉），角色表情要能被特需儿童准确识别情绪。',
+  selfcare:
+    '呈现一个明确的自理步骤或行为（洗手/刷牙/穿衣/如厕等），步骤动作分解清楚、可被模仿，环境为儿童熟悉的家庭/教室场景。',
+  cognition:
+    '突出认知概念（形状/颜色/数量/大小/前后）或精细动作对象；主体在画面正中，比例清晰，方便儿童识别与比较。',
+};
+const SP_KIND = {
+  image:
+    '构图适合作为单张图卡：一屏内只表达一个概念，视觉信息量克制，留白充足，主体占画面 60%~75%。',
+  book:
+    '每一页承担一个故事步骤，全书角色的外貌与服装严格保持一致；镜头景别以中景为主；每页只承载 1~2 句话可对应的画面。',
+};
+function defaultSystemPrompt(kind, topic) {
+  return [SP_KIND[kind] || '', SP_TOPIC[topic] || '', SP_COMMON]
+    .filter(Boolean)
+    .join(' ');
+}
 
 // 校验
 for (const [i, t] of items.entries()) {
@@ -209,9 +233,12 @@ async function main() {
       sort++;
       const prompt = `${t.scene}。${STYLE[t.style]}`;
       const cover = await genImage(prompt);
+      const systemPrompt =
+        (t.systemPrompt && String(t.systemPrompt).trim()) ||
+        defaultSystemPrompt(t.kind, t.topic);
       const row = await pool.query(
-        `insert into templates (kind, topic, style_key, title, subtitle, brief, options, prompt, cover_url, sort)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id`,
+        `insert into templates (kind, topic, style_key, title, subtitle, brief, options, prompt, system_prompt, cover_url, sort)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id`,
         [
           t.kind,
           t.topic,
@@ -221,6 +248,7 @@ async function main() {
           t.brief,
           t.kind === 'book' ? { pageCount: t.pageCount || 4 } : {},
           prompt,
+          systemPrompt,
           cover,
           sort,
         ]

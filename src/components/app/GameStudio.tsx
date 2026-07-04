@@ -23,9 +23,23 @@ type View =
   | { kind: 'play'; game: GameData }
   | { kind: 'reflex-play'; gameType: GameType; gameId: number | null; child: Child | null };
 
+/** 常见儿童喜欢的角色 —— 情绪题会用这个形象来展示表情 */
+const POPULAR_CHARACTERS = [
+  '小猪佩奇',
+  '汪汪队',
+  '米老鼠',
+  '奥特曼',
+  '光头强',
+  '海绵宝宝',
+  '艾莎公主',
+  '小马宝莉',
+];
+
 export function GameStudio() {
   const [children, setChildren] = useState<Child[]>([]);
   const [childId, setChildId] = useState<number | null>(null);
+  /** 演示角色覆写：优先于个案的 interests[0]。空串 = 用个案兴趣兜底。 */
+  const [characterOverride, setCharacterOverride] = useState('');
   const [view, setView] = useState<View>({ kind: 'list' });
   const [loading, setLoading] = useState(true);
 
@@ -81,7 +95,11 @@ export function GameStudio() {
         const res = await fetch('/api/games', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ childId: currentChild?.id, gameType }),
+          body: JSON.stringify({
+            childId: currentChild?.id,
+            gameType,
+            character: characterOverride.trim() || undefined,
+          }),
         });
         const d = await res.json();
         if (!res.ok) {
@@ -107,7 +125,7 @@ export function GameStudio() {
         setView({ kind: 'list' });
       }
     },
-    [currentChild],
+    [currentChild, characterOverride],
   );
 
   if (view.kind === 'play') {
@@ -170,6 +188,8 @@ export function GameStudio() {
             children={children}
             value={childId}
             onChange={setChildId}
+            characterOverride={characterOverride}
+            onCharacterChange={setCharacterOverride}
           />
           <GameTypeGroup
             title="认知训练"
@@ -187,55 +207,118 @@ export function GameStudio() {
   );
 }
 
-/* ---------------- 顶部个案筛选 ---------------- */
+/* ---------------- 顶部个案筛选 + 演示角色 ---------------- */
 function ChildFilter({
   children,
   value,
   onChange,
+  characterOverride,
+  onCharacterChange,
 }: {
   children: Child[];
   value: number | null;
   onChange: (id: number | null) => void;
+  characterOverride: string;
+  onCharacterChange: (v: string) => void;
 }) {
   const selected = value != null ? children.find((c) => c.id === value) : null;
+  // 生效的角色（覆写优先，其次孩子的第一个兴趣）
+  const effectiveCharacter =
+    characterOverride.trim() || selected?.interests?.[0]?.trim() || '';
   return (
-    <div className="mb-6 rounded-section border border-line bg-white p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-ink-faint">当前个案</p>
-        {value != null && (
-          <button
-            onClick={() => onChange(null)}
-            className="text-xs text-ink-faint hover:text-ink"
-          >
-            清除
-          </button>
+    <div className="mb-6 space-y-4 rounded-section border border-line bg-white p-4">
+      {/* 第一段：当前个案 */}
+      <div>
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-ink-faint">当前个案</p>
+          {value != null && (
+            <button
+              onClick={() => onChange(null)}
+              className="text-xs text-ink-faint hover:text-ink"
+            >
+              清除
+            </button>
+          )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <FilterChip active={value == null} onClick={() => onChange(null)}>
+            不指定（通用，不记录成绩）
+          </FilterChip>
+          {children.map((c) => (
+            <FilterChip
+              key={c.id}
+              active={value === c.id}
+              onClick={() => onChange(c.id)}
+            >
+              {c.nickname}
+              {c.age ? ` · ${c.age}岁` : ''}
+            </FilterChip>
+          ))}
+        </div>
+        {selected && (
+          <div className="mt-3 flex items-center gap-2 rounded-input bg-[#FFF6DE] px-3 py-2 text-xs">
+            <span className="text-base">🪙</span>
+            <span className="text-ink-soft">
+              <span className="font-medium text-[#B88515]">{selected.nickname}</span>{' '}
+              当前累计金币{' '}
+              <span className="font-medium text-[#B88515]">{selected.total_points ?? 0}</span>
+            </span>
+          </div>
         )}
       </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <FilterChip active={value == null} onClick={() => onChange(null)}>
-          不指定（通用，不记录成绩）
-        </FilterChip>
-        {children.map((c) => (
+
+      {/* 第二段：演示角色（情绪题会用它出图） */}
+      <div className="border-t border-line pt-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-ink-faint">演示角色（情绪题）</p>
+          {characterOverride && (
+            <button
+              onClick={() => onCharacterChange('')}
+              className="text-xs text-ink-faint hover:text-ink"
+            >
+              清除覆写
+            </button>
+          )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
           <FilterChip
-            key={c.id}
-            active={value === c.id}
-            onClick={() => onChange(c.id)}
+            active={!characterOverride}
+            onClick={() => onCharacterChange('')}
           >
-            {c.nickname}
-            {c.age ? ` · ${c.age}岁` : ''}
+            {selected?.interests?.[0]
+              ? `跟随个案（${selected.interests[0]}）`
+              : '通用小朋友'}
           </FilterChip>
-        ))}
-      </div>
-      {selected && (
-        <div className="mt-3 flex items-center gap-2 rounded-input bg-[#FFF6DE] px-3 py-2 text-xs">
-          <span className="text-base">🪙</span>
-          <span className="text-ink-soft">
-            <span className="font-medium text-[#B88515]">{selected.nickname}</span>{' '}
-            当前累计金币{' '}
-            <span className="font-medium text-[#B88515]">{selected.total_points ?? 0}</span>
+          {POPULAR_CHARACTERS.map((name) => (
+            <FilterChip
+              key={name}
+              active={characterOverride === name}
+              onClick={() => onCharacterChange(name)}
+            >
+              {name}
+            </FilterChip>
+          ))}
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="text"
+            value={characterOverride}
+            onChange={(e) => onCharacterChange(e.target.value)}
+            placeholder="或输入自定义角色（如：巴啦啦小魔仙）"
+            maxLength={30}
+            className="flex-1 rounded-input border border-line bg-white px-3 py-2 text-xs text-ink placeholder:text-ink-faint focus:border-clay focus:outline-none"
+          />
+        </div>
+        {/* 生效角色提示条 */}
+        <div className="mt-3 flex items-center gap-2 rounded-input bg-clay-mist px-3 py-2 text-xs text-clay-deep">
+          <span className="text-base">🎭</span>
+          <span>
+            本局情绪题的表情将使用{' '}
+            <span className="font-medium">{effectiveCharacter || '通用小朋友'}</span>{' '}
+            形象展示
           </span>
         </div>
-      )}
+      </div>
       {children.length === 0 && (
         <p className="mt-2 text-xs leading-[1.9] text-ink-faint">
           还没有个案孩子。去

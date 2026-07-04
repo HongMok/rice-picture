@@ -10,6 +10,7 @@ import {
   ChatIcon,
   ClockIcon,
   MenuIcon,
+  SettingsIcon,
   SidebarToggleIcon,
   ToolboxIcon,
   UsersIcon,
@@ -205,24 +206,32 @@ export function GlobalSidebar() {
           </div>
         )}
 
-        {/* 用户 —— 点击进入个人信息页 */}
+        {/* 用户 —— 点击进入个人信息页；右侧齿轮作为"可点击 / 可编辑"的视觉暗示 */}
         <Link
           href="/app/profile"
           onClick={() => setOpen(false)}
           className={clsx(
-            'flex items-center border-t border-line transition-colors duration-[250ms] ease-out hover:bg-paper-deep',
+            'group flex items-center border-t border-line transition-colors duration-[250ms] ease-out hover:bg-paper-deep',
             collapsed ? 'justify-center py-3' : 'gap-2.5 px-3 py-3',
             pathname === '/app/profile' && 'bg-paper-deep'
           )}
-          title={collapsed ? user?.nickname || user?.username || '个人信息' : '个人信息'}
+          title={collapsed ? user?.nickname || user?.username || '个人信息' : '个人信息 / 设置'}
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sage-mist text-sm font-medium text-sage-deep">
             {(user?.nickname || user?.username || '?').slice(0, 1)}
           </div>
           {!collapsed && (
-            <span className="max-w-[180px] truncate text-[14px] text-ink">
-              {user?.nickname || user?.username}
-            </span>
+            <>
+              <span className="min-w-0 max-w-[150px] flex-1 truncate text-[14px] text-ink">
+                {user?.nickname || user?.username}
+              </span>
+              <span
+                className="shrink-0 rounded-full p-1.5 text-ink-faint transition-colors duration-[250ms] ease-out group-hover:bg-card group-hover:text-clay-deep"
+                aria-hidden
+              >
+                <SettingsIcon width={15} height={15} />
+              </span>
+            </>
           )}
         </Link>
       </aside>

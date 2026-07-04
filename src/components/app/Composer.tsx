@@ -22,6 +22,9 @@ export interface ComposerState {
   styleKey: string;
   ratio: string;
   pageCount: number;
+  // 「做同款」时记住的模板 id；用户后续编辑输入框不会清除它，
+  // 只在「新建创作」或再点其它模板时重置。
+  templateId?: number | null;
 }
 
 export function Composer({

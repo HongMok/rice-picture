@@ -12,49 +12,91 @@ export interface RecentProject {
   created_at: string;
 }
 
-// 过去 720 小时（30 天）内创建或更新的项目，跨表联合，最多 50 条
+/**
+ * 过去 720 小时（30 天）内创建或更新的项目，跨表联合，最多 50 条。
+ * 各子表独立 try/catch —— 某张表在当前环境不存在（例如 chat_sessions 未迁移）
+ * 也只跳过它，不影响其它模块的历史条目显示。
+ */
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
-  try {
-    const rows = await query<RecentProject>(
-      `
-      select id, 'image' as type, coalesce(title, '未命名图卡') as title, updated_at, created_at
-        from works
-       where user_id = $1 and deleted_at is null and updated_at >= now() - interval '720 hours'
-      union all
-      select id, 'book' as type, coalesce(title, '未命名绘本') as title, updated_at, created_at
-        from books
-       where user_id = $1 and deleted_at is null and updated_at >= now() - interval '720 hours'
-      union all
-      select id, 'game' as type, coalesce(title, '未命名游戏') as title, updated_at, created_at
-        from games
-       where user_id = $1 and updated_at >= now() - interval '720 hours'
-      union all
-      select id, 'video' as type, coalesce(title, '未命名视频分析') as title, updated_at, created_at
-        from video_analyses
-       where user_id = $1 and updated_at >= now() - interval '720 hours'
-      union all
-      select id, 'lesson-plan' as type, coalesce(title, '未命名教案') as title, updated_at, created_at
-        from lesson_plans
-       where user_id = $1 and deleted_at is null and updated_at >= now() - interval '720 hours'
-      union all
-      select id, 'chat' as type, coalesce(title, '未命名对话') as title, updated_at, created_at
-        from chat_sessions
-       where user_id = $1 and deleted_at is null and updated_at >= now() - interval '720 hours'
-      order by updated_at desc, created_at desc
-      limit 50
-      `,
-      [user.id]
-    );
-    return NextResponse.json({ items: rows });
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: err?.message || '历史列表加载失败' },
-      { status: 500 }
-    );
+  const sources: { type: RecentProject['type']; sql: string; fallback: string }[] = [
+    {
+      type: 'image',
+      sql: `select id, updated_at, created_at, coalesce(title, $2) as title
+              from works
+             where user_id = $1 and deleted_at is null
+               and updated_at >= now() - interval '720 hours'`,
+      fallback: '未命名图卡',
+    },
+    {
+      type: 'book',
+      sql: `select id, updated_at, created_at, coalesce(title, $2) as title
+              from books
+             where user_id = $1 and deleted_at is null
+               and updated_at >= now() - interval '720 hours'`,
+      fallback: '未命名绘本',
+    },
+    {
+      type: 'game',
+      sql: `select id, updated_at, created_at, coalesce(title, $2) as title
+              from games
+             where user_id = $1
+               and updated_at >= now() - interval '720 hours'`,
+      fallback: '未命名游戏',
+    },
+    {
+      type: 'video',
+      sql: `select id, updated_at, created_at, coalesce(title, $2) as title
+              from video_analyses
+             where user_id = $1
+               and updated_at >= now() - interval '720 hours'`,
+      fallback: '未命名视频分析',
+    },
+    {
+      type: 'lesson-plan',
+      sql: `select id, updated_at, created_at, coalesce(title, $2) as title
+              from lesson_plans
+             where user_id = $1 and deleted_at is null
+               and updated_at >= now() - interval '720 hours'`,
+      fallback: '未命名教案',
+    },
+    {
+      type: 'chat',
+      sql: `select id, updated_at, created_at, coalesce(title, $2) as title
+              from chat_sessions
+             where user_id = $1 and deleted_at is null
+               and updated_at >= now() - interval '720 hours'`,
+      fallback: '未命名对话',
+    },
+  ];
+
+  const all: RecentProject[] = [];
+  for (const s of sources) {
+    try {
+      const rows = await query<{
+        id: number;
+        title: string;
+        updated_at: string;
+        created_at: string;
+      }>(s.sql, [user.id, s.fallback]);
+      for (const r of rows) all.push({ ...r, type: s.type });
+    } catch {
+      // 该表在此环境不存在 / 结构不匹配 —— 静默跳过，不影响其它模块
+    }
   }
+
+  all.sort((a, b) => {
+    const ua = new Date(a.updated_at).getTime();
+    const ub = new Date(b.updated_at).getTime();
+    if (ub !== ua) return ub - ua;
+    return (
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  });
+
+  return NextResponse.json({ items: all.slice(0, 50) });
 }

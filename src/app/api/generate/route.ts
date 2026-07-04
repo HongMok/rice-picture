@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '~/libs/auth';
 import { createImageTask } from '~/libs/dashscope';
 import { createWork } from '~/libs/works';
+import { getTemplate } from '~/libs/templates';
 import { styleSuffix, COMMON_NEGATIVE, sizeForRatio } from '~/data/taxonomy';
 
 export const runtime = 'nodejs';
@@ -14,6 +15,7 @@ export async function POST(req: Request) {
     brief?: string;
     styleKey?: string;
     ratio?: string;
+    templateId?: number | null;
   };
   try {
     body = await req.json();
@@ -28,8 +30,17 @@ export async function POST(req: Request) {
 
   const styleKey = body.styleKey || 'warm';
   const ratio = body.ratio || '4:3';
-  const prompt = `${brief}。${styleSuffix(styleKey)}`;
-  const title = brief.slice(0, 30);
+
+  // 若「做同款」带了 templateId，拼上该模板的专家 system_prompt
+  let systemPrompt = '';
+  if (body.templateId) {
+    const t = await getTemplate(Number(body.templateId));
+    if (t?.system_prompt) systemPrompt = t.system_prompt.trim();
+  }
+  const prompt = [brief, systemPrompt, styleSuffix(styleKey)]
+    .filter(Boolean)
+    .join('。');
+  const title = brief.split('\n')[0].replace(/^主题：/, '').slice(0, 30) || brief.slice(0, 30);
 
   try {
     const taskId = await createImageTask({

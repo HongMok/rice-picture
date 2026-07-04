@@ -20,7 +20,14 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
-  let body: { childId?: number; gameType?: GameType; roundCount?: number; difficulty?: string };
+  let body: {
+    childId?: number;
+    gameType?: GameType;
+    roundCount?: number;
+    difficulty?: string;
+    /** 覆盖使用哪个角色形象出题（不指定则用孩子 interests[0]） */
+    character?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -57,13 +64,14 @@ export async function POST(req: Request) {
   });
 
   try {
-    // 2) 千问定制出题
-    const generated = await generateGame(gameType, child, roundCount);
-    const rounds = generated.rounds;
-
-    // 偏好物角色化：取孩子第一个兴趣作为「演示角色」，
+    // 偏好物角色化：取覆写参数 / 孩子第一个兴趣，作为「演示角色」，
     //   用它来表演各种表情（如兴趣=小猪佩奇 → 画佩奇形象的表情），提升代入感。
-    const character = child?.interests?.[0]?.trim() || '';
+    const characterOverride = body.character?.trim() || '';
+    const character = characterOverride || child?.interests?.[0]?.trim() || '';
+
+    // 2) 千问定制出题
+    const generated = await generateGame(gameType, child, roundCount, character || undefined);
+    const rounds = generated.rounds;
     // 去版权化：受版权 IP（奥特曼/佩奇等）直接生图会被 IPInfringementSuspect 拒绝，
     //   转成描述性形象再喂生图。label 仍用原角色名，保证缓存复用。
     const characterVisual = character ? await describeCharacter(character) : '';

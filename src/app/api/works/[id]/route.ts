@@ -10,6 +10,42 @@ function parseId(raw: string): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 });
+
+  const id = parseId(params.id);
+  if (!id) return NextResponse.json({ error: '无效的图卡 ID' }, { status: 400 });
+
+  const work = await getWorkById(id, user.id);
+  if (!work) return NextResponse.json({ error: '图卡不存在' }, { status: 404 });
+
+  let brief = '';
+  let styleKey = 'warm';
+  let ratio = '4:3';
+  try {
+    const parsed = JSON.parse(work.input_text || '{}');
+    brief = String(parsed.brief || '').trim();
+    styleKey = parsed.styleKey || styleKey;
+    ratio = parsed.ratio || ratio;
+  } catch {
+    brief = (work.input_text || '').trim();
+  }
+
+  return NextResponse.json({
+    work: {
+      id: work.id,
+      title: work.title,
+      status: work.status,
+      brief,
+      styleKey,
+      ratio,
+      taskId: work.task_id,
+      outputUrl: work.output_url,
+    },
+  });
+}
+
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 });

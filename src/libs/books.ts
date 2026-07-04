@@ -89,6 +89,19 @@ export async function setBookStatus(
   ]);
 }
 
+/**
+ * 重置一本失败绘本：清空 pages、清空 title，把状态置回 DRAFTING，
+ * 后续走原有的写文 + 逐页生图流水线。
+ */
+export async function resetBookForRetry(bookId: number): Promise<void> {
+  await query('delete from book_pages where book_id = $1', [bookId]);
+  await query(
+    `update books set status = 'DRAFTING', title = null, updated_at = now()
+      where id = $1`,
+    [bookId]
+  );
+}
+
 export async function getBook(
   bookId: number,
   userId: number
