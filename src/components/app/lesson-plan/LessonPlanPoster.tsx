@@ -29,9 +29,18 @@ const GENERATING_POLL_MS = 3000;
  */
 export function LessonPlanPoster({ initialPlan }: { initialPlan: LessonPlan }) {
   const [plan, setPlan] = useState<LessonPlan>(initialPlan);
+  const prevStatusRef = useRef<string>(initialPlan.status);
 
   // GENERATING/FAILED 时轮询 GET /api/lesson-plans/[id]，成功切回 READY 后停止
   useEffect(() => {
+    // 状态从非 READY 切到 READY 时，通知侧栏刷新（拿真标题替换"正在生成…"占位）
+    if (prevStatusRef.current !== 'READY' && plan.status === 'READY') {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('xiaohe:history-refresh'));
+      }
+    }
+    prevStatusRef.current = plan.status;
+
     if (plan.status === 'READY') return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;

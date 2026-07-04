@@ -147,6 +147,21 @@ export function LessonPlanGenerator() {
       const planId = draftData.plan?.id;
       if (!planId) throw new Error('创建失败：缺少教案 id');
 
+      // 立刻把 draft 加进左侧「过去 30 天」历史（乐观 add），让用户能中途关掉再从侧栏进
+      if (typeof window !== 'undefined' && draftData.plan) {
+        window.dispatchEvent(
+          new CustomEvent('xiaohe:history-add', {
+            detail: {
+              id: planId,
+              type: 'lesson-plan',
+              title: draftData.plan.title || draftTitle || '正在生成…',
+              updated_at: draftData.plan.updatedAt,
+              created_at: draftData.plan.createdAt,
+            },
+          })
+        );
+      }
+
       // 2) fire-and-forget 触发后台生成。不 await——即使用户跳走，请求也会跑到完成。
       fetch(`/api/lesson-plans/${planId}/generate`, {
         method: 'POST',
