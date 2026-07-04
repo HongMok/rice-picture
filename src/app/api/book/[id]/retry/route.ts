@@ -21,12 +21,12 @@ export const maxDuration = 60;
  */
 export async function POST(
   _req: Request,
-  { params }: { params: { bookId: string } }
+  { params }: { params: { id: string } }
 ) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
-  const bookId = Number(params.bookId);
+  const bookId = Number(params.id);
   if (!Number.isFinite(bookId)) {
     return NextResponse.json({ error: '无效 id' }, { status: 400 });
   }

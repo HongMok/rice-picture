@@ -327,7 +327,7 @@ export function Workbench({
   async function retryItem(it: LibItem) {
     const url =
       it.kind === 'image'
-        ? `/api/generate/${it.id}/retry`
+        ? `/api/works/${it.id}/retry`
         : `/api/book/${it.id}/retry`;
     // 先乐观置回 pending
     setItems((cur) =>

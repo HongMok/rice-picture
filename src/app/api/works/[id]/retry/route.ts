@@ -12,12 +12,12 @@ export const runtime = 'nodejs';
  */
 export async function POST(
   _req: Request,
-  { params }: { params: { workId: string } }
+  { params }: { params: { id: string } }
 ) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 });
 
-  const workId = Number(params.workId);
+  const workId = Number(params.id);
   if (!Number.isFinite(workId)) {
     return NextResponse.json({ error: '无效 id' }, { status: 400 });
   }
