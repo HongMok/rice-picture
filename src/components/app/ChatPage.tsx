@@ -126,6 +126,25 @@ export function ChatPage() {
     setError('');
     setSending(true);
 
+    // 首轮：立刻在侧栏塞一条乐观条目，让"过去 30 天"即刻可见
+    // 后端会在几十毫秒内创建真 session；API 返回后广播 refresh，用真数据 hydrate 替换
+    const isFirstTurn = !sessionId;
+    if (isFirstTurn && typeof window !== 'undefined') {
+      const previewTitle = text.trim().replace(/\s+/g, ' ').slice(0, 20);
+      const nowIso = new Date().toISOString();
+      window.dispatchEvent(
+        new CustomEvent('xiaohe:history-add', {
+          detail: {
+            id: -Date.now(), // 负 id 占位，避免和真 id 冲突
+            type: 'chat',
+            title: previewTitle + (text.trim().length > 20 ? '…' : ''),
+            updated_at: nowIso,
+            created_at: nowIso,
+          },
+        })
+      );
+    }
+
     try {
       const history = [...messages, userMsg]
         .filter((m) => !m.pending && !m.failed)
@@ -158,10 +177,20 @@ export function ChatPage() {
         setSessionId(data.sessionId);
         router.replace(`/app/chat?id=${data.sessionId}`, { scroll: false });
       }
+
+      // 通知侧栏刷新历史列表（拉真数据、替换掉乐观占位条目）
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('xiaohe:history-refresh'));
+      }
     } catch (err: any) {
       setMessages((prev) => prev.filter((m) => m.id !== pendingMsg.id));
       setInput(text);
       setError(err?.name === 'AbortError' ? '请求超时，请重试' : err?.message || '请求失败，请重试');
+      // 失败时也刷一下：如果后端已回滚软删，占位条目会被真数据替换（不含它）；
+      // 若后端已创建真 session，那就正常显示。
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('xiaohe:history-refresh'));
+      }
     } finally {
       setSending(false);
     }

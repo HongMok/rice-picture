@@ -56,8 +56,31 @@ export function GlobalSidebar() {
     loadHistory();
   }, []);
 
+  // 监听全站派发的历史刷新事件（新对话/新作品创建时触发）
+  useEffect(() => {
+    function onRefresh() {
+      loadHistory();
+    }
+    function onOptimisticAdd(e: Event) {
+      const detail = (e as CustomEvent<RecentProject>).detail;
+      if (!detail) return;
+      setHistory((s) =>
+        s.kind === 'ready'
+          ? { kind: 'ready', items: [detail, ...s.items] }
+          : s
+      );
+    }
+    window.addEventListener('xiaohe:history-refresh', onRefresh);
+    window.addEventListener('xiaohe:history-add', onOptimisticAdd as EventListener);
+    return () => {
+      window.removeEventListener('xiaohe:history-refresh', onRefresh);
+      window.removeEventListener('xiaohe:history-add', onOptimisticAdd as EventListener);
+    };
+  }, []);
+
   async function loadHistory() {
-    setHistory({ kind: 'loading' });
+    // 只在首次或没有 items 时进入 loading 骨架，避免在有条目时先 flash 空态
+    setHistory((s) => (s.kind === 'ready' ? s : { kind: 'loading' }));
     try {
       const res = await fetch('/api/projects/recent');
       if (!res.ok) throw new Error();
